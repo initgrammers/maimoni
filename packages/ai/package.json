@@ -1,0 +1,11 @@
+{
+  "name": "@maimoni/ai",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@llamaindex/cloud": "^4.1.3",
+    "groq-sdk": "latest",
+    "llamaindex": "latest"
+  }
+}

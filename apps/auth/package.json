@@ -1,0 +1,14 @@
+{
+  "name": "auth-server",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@maimoni/db": "workspace:*",
+    "@openauthjs/openauth": "^0.4.3",
+    "hono": "^4.11.9",
+    "twilio": "latest",
+    "valibot": "^1.2.0"
+  }
+}

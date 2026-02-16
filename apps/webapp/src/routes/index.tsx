@@ -1,118 +1,215 @@
-import { createFileRoute } from '@tanstack/react-router'
-import {
-  Zap,
-  Server,
-  Route as RouteIcon,
-  Shield,
-  Waves,
-  Sparkles,
-} from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { Plus, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { getCategoryById } from '../data/categories';
+import type { Movement } from '../types';
 
-export const Route = createFileRoute('/')({ component: App })
+export const Route = createFileRoute('/' as never)({
+  component: Dashboard,
+});
 
-function App() {
-  const features = [
-    {
-      icon: <Zap className="w-12 h-12 text-cyan-400" />,
-      title: 'Powerful Server Functions',
-      description:
-        'Write server-side code that seamlessly integrates with your client components. Type-safe, secure, and simple.',
+const MOCK_MOVEMENTS: Movement[] = [
+  {
+    id: '1',
+    amount: 3500,
+    type: 'income',
+    category: getCategoryById('salary')!,
+    date: new Date('2026-02-15'),
+    note: 'Salario febrero',
+    userId: '1',
+    userName: 'Henry',
+  },
+  {
+    id: '2',
+    amount: 45.5,
+    type: 'expense',
+    category: getCategoryById('food')!,
+    subcategory: { id: 'restaurants', name: 'Restaurantes', emoji: '🍽️' },
+    date: new Date('2026-02-16T13:30:00'),
+    note: 'Almuerzo con el equipo',
+    userId: '1',
+    userName: 'Henry',
+  },
+  {
+    id: '3',
+    amount: 120.0,
+    type: 'expense',
+    category: getCategoryById('shopping')!,
+    subcategory: { id: 'clothes', name: 'Ropa/Calzado', emoji: '👕' },
+    date: new Date('2026-02-16T10:15:00'),
+    userId: '2',
+    userName: 'María',
+  },
+  {
+    id: '4',
+    amount: 15.0,
+    type: 'expense',
+    category: getCategoryById('transport')!,
+    subcategory: { id: 'rideshare', name: 'Uber/Didi', emoji: '🚕' },
+    date: new Date('2026-02-15T19:20:00'),
+    userId: '1',
+    userName: 'Henry',
+  },
+  {
+    id: '5',
+    amount: 89.99,
+    type: 'expense',
+    category: getCategoryById('food')!,
+    subcategory: { id: 'supermarket', name: 'Supermercados', emoji: '🛒' },
+    date: new Date('2026-02-14'),
+    note: 'Compras semanales',
+    userId: '2',
+    userName: 'María',
+  },
+];
+
+function Dashboard() {
+  const totalIncome = MOCK_MOVEMENTS.filter((m) => m.type === 'income').reduce(
+    (sum, m) => sum + m.amount,
+    0,
+  );
+  const totalExpenses = MOCK_MOVEMENTS.filter(
+    (m) => m.type === 'expense',
+  ).reduce((sum, m) => sum + m.amount, 0);
+  const balance = totalIncome - totalExpenses;
+
+  const groupedMovements = MOCK_MOVEMENTS.reduce(
+    (groups, movement) => {
+      const dateKey = movement.date.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(movement);
+      return groups;
     },
-    {
-      icon: <Server className="w-12 h-12 text-cyan-400" />,
-      title: 'Flexible Server Side Rendering',
-      description:
-        'Full-document SSR, streaming, and progressive enhancement out of the box. Control exactly what renders where.',
-    },
-    {
-      icon: <RouteIcon className="w-12 h-12 text-cyan-400" />,
-      title: 'API Routes',
-      description:
-        'Build type-safe API endpoints alongside your application. No separate backend needed.',
-    },
-    {
-      icon: <Shield className="w-12 h-12 text-cyan-400" />,
-      title: 'Strongly Typed Everything',
-      description:
-        'End-to-end type safety from server to client. Catch errors before they reach production.',
-    },
-    {
-      icon: <Waves className="w-12 h-12 text-cyan-400" />,
-      title: 'Full Streaming Support',
-      description:
-        'Stream data from server to client progressively. Perfect for AI applications and real-time updates.',
-    },
-    {
-      icon: <Sparkles className="w-12 h-12 text-cyan-400" />,
-      title: 'Next Generation Ready',
-      description:
-        'Built from the ground up for modern web applications. Deploy anywhere JavaScript runs.',
-    },
-  ]
+    {} as Record<string, Movement[]>,
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      <section className="relative py-20 px-6 text-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-purple-500/10"></div>
-        <div className="relative max-w-5xl mx-auto">
-          <div className="flex items-center justify-center gap-6 mb-6">
-            <img
-              src="/tanstack-circle-logo.png"
-              alt="TanStack Logo"
-              className="w-24 h-24 md:w-32 md:h-32"
-            />
-            <h1 className="text-6xl md:text-7xl font-black text-white [letter-spacing:-0.08em]">
-              <span className="text-gray-300">TANSTACK</span>{' '}
-              <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                START
-              </span>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <header className="px-5 pt-8 pb-6">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Wallet className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              maimonei
             </h1>
           </div>
-          <p className="text-2xl md:text-3xl text-gray-300 mb-4 font-light">
-            The framework for next generation AI applications
-          </p>
-          <p className="text-lg text-gray-400 max-w-3xl mx-auto mb-8">
-            Full-stack framework powered by TanStack Router for React and Solid.
-            Build modern applications with server functions, streaming, and type
-            safety.
-          </p>
-          <div className="flex flex-col items-center gap-4">
-            <a
-              href="https://tanstack.com/start"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
-            >
-              Documentation
-            </a>
-            <p className="text-gray-400 text-sm mt-2">
-              Begin your TanStack Start journey by editing{' '}
-              <code className="px-2 py-1 bg-slate-700 rounded text-cyan-400">
-                /src/routes/index.tsx
-              </code>
+          <Link
+            to="/add"
+            className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-violet-500/30 active:scale-95 transition-transform"
+          >
+            <Plus className="w-6 h-6 text-white" strokeWidth={3} />
+          </Link>
+        </div>
+
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-slate-700/50 p-6 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-violet-500/10" />
+          <div className="relative">
+            <p className="text-sm font-medium text-slate-400 mb-2 tracking-wide uppercase">
+              Balance Disponible
             </p>
+            <p className="text-5xl font-black text-white mb-6 tracking-tight">
+              ${balance.toFixed(2)}
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Ingresos</p>
+                  <p className="text-lg font-bold text-emerald-400">
+                    ${totalIncome.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
+                  <TrendingDown className="w-5 h-5 text-rose-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Gastos</p>
+                  <p className="text-lg font-bold text-rose-400">
+                    ${totalExpenses.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      </header>
 
-      <section className="py-16 px-6 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
-            >
-              <div className="mb-4">{feature.icon}</div>
-              <h3 className="text-xl font-semibold text-white mb-3">
-                {feature.title}
-              </h3>
-              <p className="text-gray-400 leading-relaxed">
-                {feature.description}
+      <main className="px-5 pb-8">
+        <h2 className="text-lg font-bold text-white mb-4 tracking-tight">
+          Movimientos
+        </h2>
+
+        <div className="space-y-6">
+          {Object.entries(groupedMovements).map(([date, movements]) => (
+            <div key={date}>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">
+                {date}
               </p>
+              <div className="space-y-2">
+                {movements.map((movement) => (
+                  <div
+                    key={movement.id}
+                    className="group relative overflow-hidden rounded-2xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 p-4 active:scale-[0.98] transition-all"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center text-2xl flex-shrink-0">
+                        {movement.subcategory?.emoji || movement.category.emoji}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="font-semibold text-white truncate">
+                            {movement.subcategory?.name ||
+                              movement.category.name}
+                          </p>
+                          <p
+                            className={`text-lg font-black flex-shrink-0 ${
+                              movement.type === 'income'
+                                ? 'text-emerald-400'
+                                : 'text-rose-400'
+                            }`}
+                          >
+                            {movement.type === 'income' ? '+' : '-'}$
+                            {movement.amount.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span>{movement.userName}</span>
+                          <span>•</span>
+                          <span>
+                            {movement.date.toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {movement.note && (
+                            <>
+                              <span>•</span>
+                              <span className="truncate">{movement.note}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
-      </section>
+      </main>
     </div>
-  )
+  );
 }

@@ -4,7 +4,12 @@
     "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
-    "hono": "^4.11.9"
+    "@maimoni/ai": "workspace:*",
+    "@maimoni/db": "workspace:*",
+    "@openauthjs/openauth": "latest",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.11.9",
+    "zod": "latest"
   },
   "devDependencies": {
     "@types/bun": "latest"

@@ -1,14 +1,28 @@
 {
   "name": "maimoni",
-  "workspaces":[
+  "workspaces": [
     "apps/*",
     "packages/*"
   ],
+  "scripts": {
+    "sst": "sst --stage $STAGE",
+    "env": "bun --env-file=.env",
+    "check": "biome check --write .",
+    "format": "biome format --write .",
+    "lint": "biome lint ."
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@biomejs/biome": "^2.4.1",
+    "@types/aws-lambda": "8.10.160",
+    "@types/bun": "latest",
+    "ion": "^1.0.1",
+    "lucide-react": "^0.564.0"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
-  "packageManager": "bun@1.0.0+"
+  "packageManager": "bun@1.0.0+",
+  "dependencies": {
+    "sst": "^3.18.5"
+  }
 }
