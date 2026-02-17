@@ -1,93 +1,271 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { Plus, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
-import { getCategoryById } from '../data/categories';
-import type { Movement } from '../types';
+import { useEffect, useMemo, useState } from 'react';
+import { getApiBase, startAuth } from '../lib/openauth';
+
+type Board = {
+  id: string;
+  name: string;
+};
+
+type Income = {
+  id: string;
+  amount: string;
+  date: string;
+  note: string | null;
+};
+
+type Expense = {
+  id: string;
+  amount: string;
+  date: string;
+  note: string | null;
+};
+
+type DashboardResponse = {
+  board: Board;
+  incomes: Income[];
+  expenses: Expense[];
+};
+
+type DisplayMovement = {
+  id: string;
+  amount: number;
+  type: 'income' | 'expense';
+  date: Date;
+  note: string | null;
+};
+
+const API_BASE = getApiBase();
 
 export const Route = createFileRoute('/' as never)({
   component: Dashboard,
 });
 
-const MOCK_MOVEMENTS: Movement[] = [
-  {
-    id: '1',
-    amount: 3500,
-    type: 'income',
-    category: getCategoryById('salary')!,
-    date: new Date('2026-02-15'),
-    note: 'Salario febrero',
-    userId: '1',
-    userName: 'Henry',
-  },
-  {
-    id: '2',
-    amount: 45.5,
-    type: 'expense',
-    category: getCategoryById('food')!,
-    subcategory: { id: 'restaurants', name: 'Restaurantes', emoji: '🍽️' },
-    date: new Date('2026-02-16T13:30:00'),
-    note: 'Almuerzo con el equipo',
-    userId: '1',
-    userName: 'Henry',
-  },
-  {
-    id: '3',
-    amount: 120.0,
-    type: 'expense',
-    category: getCategoryById('shopping')!,
-    subcategory: { id: 'clothes', name: 'Ropa/Calzado', emoji: '👕' },
-    date: new Date('2026-02-16T10:15:00'),
-    userId: '2',
-    userName: 'María',
-  },
-  {
-    id: '4',
-    amount: 15.0,
-    type: 'expense',
-    category: getCategoryById('transport')!,
-    subcategory: { id: 'rideshare', name: 'Uber/Didi', emoji: '🚕' },
-    date: new Date('2026-02-15T19:20:00'),
-    userId: '1',
-    userName: 'Henry',
-  },
-  {
-    id: '5',
-    amount: 89.99,
-    type: 'expense',
-    category: getCategoryById('food')!,
-    subcategory: { id: 'supermarket', name: 'Supermercados', emoji: '🛒' },
-    date: new Date('2026-02-14'),
-    note: 'Compras semanales',
-    userId: '2',
-    userName: 'María',
-  },
-];
+async function fetchDashboard(accessToken: string) {
+  const response = await fetch(`${API_BASE}/api/dashboard`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to load dashboard');
+  }
+
+  return (await response.json()) as DashboardResponse;
+}
 
 function Dashboard() {
-  const totalIncome = MOCK_MOVEMENTS.filter((m) => m.type === 'income').reduce(
-    (sum, m) => sum + m.amount,
-    0,
-  );
-  const totalExpenses = MOCK_MOVEMENTS.filter(
-    (m) => m.type === 'expense',
-  ).reduce((sum, m) => sum + m.amount, 0);
-  const balance = totalIncome - totalExpenses;
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [anonymousId, setAnonymousId] = useState<string | null>(null);
+  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const groupedMovements = MOCK_MOVEMENTS.reduce(
-    (groups, movement) => {
-      const dateKey = movement.date.toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
+  useEffect(() => {
+    setAccessToken(window.localStorage.getItem('accessToken'));
+    setAnonymousId(window.localStorage.getItem('anonymousId'));
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated || !accessToken || data || loading) {
+      return;
+    }
+
+    const pendingClaimAnonymousId = window.localStorage.getItem(
+      'pendingClaimAnonymousId',
+    );
+
+    setLoading(true);
+    setError(null);
+
+    const claimPromise = pendingClaimAnonymousId
+      ? fetch(`${API_BASE}/api/auth/claim`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ anonymousId: pendingClaimAnonymousId }),
+        }).then(async (response) => {
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(payload?.error ?? 'No se pudo reclamar el tablero');
+          }
+        })
+      : Promise.resolve();
+
+    void claimPromise
+      .then(async () => {
+        if (pendingClaimAnonymousId) {
+          window.localStorage.removeItem('pendingClaimAnonymousId');
+          window.localStorage.removeItem('anonymousId');
+          setAnonymousId(null);
+        }
+
+        const dashboard = await fetchDashboard(accessToken);
+        setData(dashboard);
+      })
+      .catch((error) => {
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'No se pudo cargar el dashboard',
+        );
+      })
+      .finally(() => {
+        setLoading(false);
       });
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
+  }, [accessToken, data, isHydrated, loading]);
+
+  const movements = useMemo<DisplayMovement[]>(() => {
+    if (!data) return [];
+
+    const mappedIncomes = data.incomes.map((income) => ({
+      id: income.id,
+      amount: Number(income.amount),
+      type: 'income' as const,
+      date: new Date(income.date),
+      note: income.note,
+    }));
+
+    const mappedExpenses = data.expenses.map((expense) => ({
+      id: expense.id,
+      amount: Number(expense.amount),
+      type: 'expense' as const,
+      date: new Date(expense.date),
+      note: expense.note,
+    }));
+
+    return [...mappedIncomes, ...mappedExpenses].sort(
+      (a, b) => b.date.getTime() - a.date.getTime(),
+    );
+  }, [data]);
+
+  const totals = useMemo(() => {
+    const totalIncome = movements
+      .filter((m) => m.type === 'income')
+      .reduce((sum, m) => sum + m.amount, 0);
+    const totalExpenses = movements
+      .filter((m) => m.type === 'expense')
+      .reduce((sum, m) => sum + m.amount, 0);
+    return {
+      totalIncome,
+      totalExpenses,
+      balance: totalIncome - totalExpenses,
+    };
+  }, [movements]);
+
+  const groupedMovements = useMemo(() => {
+    return movements.reduce(
+      (groups, movement) => {
+        const dateKey = movement.date.toLocaleDateString('es-ES', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+        if (!groups[dateKey]) {
+          groups[dateKey] = [];
+        }
+        groups[dateKey].push(movement);
+        return groups;
+      },
+      {} as Record<string, DisplayMovement[]>,
+    );
+  }, [movements]);
+
+  async function continueAsAnonymous() {
+    setError(null);
+    setLoading(true);
+    try {
+      await startAuth('anonymous');
+    } catch {
+      setError('No se pudo iniciar sesion anonima');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loginAndClaim() {
+    setError(null);
+    setLoading(true);
+    try {
+      if (anonymousId) {
+        localStorage.setItem('pendingClaimAnonymousId', anonymousId);
       }
-      groups[dateKey].push(movement);
-      return groups;
-    },
-    {} as Record<string, Movement[]>,
-  );
+      await startAuth('whatsapp');
+    } catch {
+      setError('No se pudo iniciar sesion');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function logout() {
+    window.localStorage.removeItem('accessToken');
+    window.localStorage.removeItem('refreshToken');
+    window.localStorage.removeItem('anonymousId');
+    window.localStorage.removeItem('pendingClaimAnonymousId');
+    window.sessionStorage.removeItem('auth_challenge');
+    setAccessToken(null);
+    setAnonymousId(null);
+    setData(null);
+    setError(null);
+  }
+
+  if (!isHydrated) {
+    return <div className="min-h-screen bg-slate-950" />;
+  }
+
+  if (!accessToken) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white px-5 py-10">
+        <div className="max-w-md mx-auto space-y-6">
+          <h1 className="text-3xl font-black tracking-tight">maimonei</h1>
+          <p className="text-slate-300">
+            Comienza ahora sin cuenta o inicia sesion para sincronizar tus
+            tableros.
+          </p>
+          <button
+            className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-bold text-white"
+            onClick={continueAsAnonymous}
+            type="button"
+            disabled={loading}
+          >
+            Continuar como anonimo
+          </button>
+          <button
+            className="w-full rounded-xl bg-sky-500 px-4 py-3 font-bold text-white"
+            onClick={loginAndClaim}
+            type="button"
+            disabled={loading}
+          >
+            Iniciar sesion con WhatsApp
+          </button>
+          {error && <p className="text-rose-300 text-sm">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white px-5 py-10">
+        <div className="max-w-md mx-auto space-y-4">
+          <p className="text-slate-300 text-sm">
+            {loading ? 'Cargando dashboard...' : 'Preparando dashboard...'}
+          </p>
+          {error && <p className="text-rose-300 text-sm">{error}</p>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -98,15 +276,37 @@ function Dashboard() {
               <Wallet className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">
-              maimonei
+              {data.board.name}
             </h1>
           </div>
-          <Link
-            to="/add"
-            className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-violet-500/30 active:scale-95 transition-transform"
-          >
-            <Plus className="w-6 h-6 text-white" strokeWidth={3} />
-          </Link>
+          <div className="flex items-center gap-2">
+            {anonymousId && (
+              <button
+                type="button"
+                onClick={loginAndClaim}
+                disabled={loading}
+                className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+              >
+                Iniciar sesion
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white"
+            >
+              Cerrar sesion
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = '/add';
+              }}
+              className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-violet-500/30 active:scale-95 transition-transform"
+            >
+              <Plus className="w-6 h-6 text-white" strokeWidth={3} />
+            </button>
+          </div>
         </div>
 
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-slate-700/50 p-6 shadow-2xl">
@@ -116,7 +316,7 @@ function Dashboard() {
               Balance Disponible
             </p>
             <p className="text-5xl font-black text-white mb-6 tracking-tight">
-              ${balance.toFixed(2)}
+              ${totals.balance.toFixed(2)}
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-start gap-3">
@@ -126,7 +326,7 @@ function Dashboard() {
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Ingresos</p>
                   <p className="text-lg font-bold text-emerald-400">
-                    ${totalIncome.toFixed(2)}
+                    ${totals.totalIncome.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -137,7 +337,7 @@ function Dashboard() {
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Gastos</p>
                   <p className="text-lg font-bold text-rose-400">
-                    ${totalExpenses.toFixed(2)}
+                    ${totals.totalExpenses.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -152,56 +352,45 @@ function Dashboard() {
         </h2>
 
         <div className="space-y-6">
-          {Object.entries(groupedMovements).map(([date, movements]) => (
+          {Object.entries(groupedMovements).map(([date, items]) => (
             <div key={date}>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">
                 {date}
               </p>
               <div className="space-y-2">
-                {movements.map((movement) => (
+                {items.map((movement) => (
                   <div
                     key={movement.id}
-                    className="group relative overflow-hidden rounded-2xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 p-4 active:scale-[0.98] transition-all"
+                    className="group relative overflow-hidden rounded-2xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 p-4"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center text-2xl flex-shrink-0">
-                        {movement.subcategory?.emoji || movement.category.emoji}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <p className="font-semibold text-white truncate">
-                            {movement.subcategory?.name ||
-                              movement.category.name}
-                          </p>
-                          <p
-                            className={`text-lg font-black flex-shrink-0 ${
-                              movement.type === 'income'
-                                ? 'text-emerald-400'
-                                : 'text-rose-400'
-                            }`}
-                          >
-                            {movement.type === 'income' ? '+' : '-'}$
-                            {movement.amount.toFixed(2)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                          <span>{movement.userName}</span>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-semibold text-white truncate">
+                        {movement.type === 'income' ? 'Ingreso' : 'Gasto'}
+                      </p>
+                      <p
+                        className={`text-lg font-black flex-shrink-0 ${
+                          movement.type === 'income'
+                            ? 'text-emerald-400'
+                            : 'text-rose-400'
+                        }`}
+                      >
+                        {movement.type === 'income' ? '+' : '-'}$
+                        {movement.amount.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <span>
+                        {movement.date.toLocaleTimeString('es-ES', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                      {movement.note && (
+                        <>
                           <span>•</span>
-                          <span>
-                            {movement.date.toLocaleTimeString('es-ES', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          {movement.note && (
-                            <>
-                              <span>•</span>
-                              <span className="truncate">{movement.note}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                          <span className="truncate">{movement.note}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

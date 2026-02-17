@@ -4,6 +4,10 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "@openauthjs/openauth": "latest"
+    "@openauthjs/openauth": "latest",
+    "valibot": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
   }
 }

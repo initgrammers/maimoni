@@ -17,6 +17,14 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
+        name: 'maimoni-api-url',
+        content: process.env.API_URL ?? '',
+      },
+      {
+        name: 'maimoni-auth-url',
+        content: process.env.AUTH_URL ?? '',
+      },
+      {
         title: 'TanStack Start Starter',
       },
     ],

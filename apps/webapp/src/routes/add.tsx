@@ -1,15 +1,21 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Check, Scan, X } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../data/categories';
+import { requireClientAuth } from '../lib/route-guards';
 import type { Category, MovementType } from '../types';
 
 export const Route = createFileRoute('/add' as never)({
+  beforeLoad: () => {
+    requireClientAuth();
+  },
   component: AddMovement,
 });
 
 function AddMovement() {
   const navigate = useNavigate();
+  const amountInputId = useId();
+  const noteInputId = useId();
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<MovementType>('expense');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
@@ -24,7 +30,11 @@ function AddMovement() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log({ amount, type, category: selectedCategory, note });
-    navigate({ to: '/' });
+    navigate({
+      to: '/',
+      search: (current) => current,
+      params: (current) => current,
+    });
   };
 
   return (
@@ -35,6 +45,8 @@ function AddMovement() {
         </h1>
         <Link
           to="/"
+          search={(current) => current}
+          params={(current) => current}
           className="w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center active:scale-95 transition-transform"
         >
           <X className="w-5 h-5 text-slate-400" />
@@ -87,7 +99,7 @@ function AddMovement() {
 
           <div className="space-y-3">
             <label
-              htmlFor="amount"
+              htmlFor={amountInputId}
               className="block text-sm font-semibold text-slate-400 uppercase tracking-wider"
             >
               Monto
@@ -97,7 +109,7 @@ function AddMovement() {
                 $
               </span>
               <input
-                id="amount"
+                id={amountInputId}
                 type="number"
                 step="0.01"
                 value={amount}
@@ -165,13 +177,13 @@ function AddMovement() {
 
           <div className="space-y-3">
             <label
-              htmlFor="note"
+              htmlFor={noteInputId}
               className="block text-sm font-semibold text-slate-400 uppercase tracking-wider"
             >
               Nota (opcional)
             </label>
             <input
-              id="note"
+              id={noteInputId}
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -210,6 +222,8 @@ function AddMovement() {
             </button>
             <Link
               to="/"
+              search={(current) => current}
+              params={(current) => current}
               className="block w-full bg-slate-800/60 border border-slate-700/50 rounded-2xl py-5 font-bold text-slate-400 text-center active:scale-[0.98] transition-all"
             >
               Cancelar

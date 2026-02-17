@@ -5,6 +5,7 @@
     "dev": "bun run src/index.ts"
   },
   "dependencies": {
+    "@maimoni/auth": "workspace:*",
     "@maimoni/db": "workspace:*",
     "@openauthjs/openauth": "^0.4.3",
     "hono": "^4.11.9",
