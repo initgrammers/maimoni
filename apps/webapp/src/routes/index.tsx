@@ -74,7 +74,7 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isHydrated || !accessToken || data || loading) {
+    if (!isHydrated || !accessToken || loading) {
       return;
     }
 
@@ -124,7 +124,7 @@ function Dashboard() {
       .finally(() => {
         setLoading(false);
       });
-  }, [accessToken, data, isHydrated, loading]);
+  }, [accessToken, isHydrated, loading]);
 
   const movements = useMemo<DisplayMovement[]>(() => {
     if (!data) return [];

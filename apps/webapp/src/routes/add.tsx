@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Check, Scan, X } from 'lucide-react';
-import { useId, useState } from 'react';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../data/categories';
+import { Check, Loader2, Scan, X } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, MovementType } from '../types';
+
+const API_BASE = getApiBase();
 
 export const Route = createFileRoute('/add' as never)({
   beforeLoad: () => {
@@ -12,29 +14,100 @@ export const Route = createFileRoute('/add' as never)({
   component: AddMovement,
 });
 
+async function fetchCategories(accessToken: string, type: MovementType) {
+  const response = await fetch(`${API_BASE}/api/categories?type=${type}`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to load categories');
+  }
+
+  return (await response.json()) as Category[];
+}
+
 function AddMovement() {
   const navigate = useNavigate();
   const amountInputId = useId();
   const noteInputId = useId();
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<MovementType>('expense');
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
     null,
   );
   const [note, setNote] = useState('');
   const [showCategories, setShowCategories] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const categories =
-    type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  useEffect(() => {
+    const accessToken = window.localStorage.getItem('accessToken');
+    if (!accessToken) return;
 
-  const handleSubmit = (e: React.FormEvent) => {
+    setLoading(true);
+    fetchCategories(accessToken, type)
+      .then((data) => {
+        setCategories(data);
+      })
+      .catch((err) => {
+        setError(
+          err instanceof Error ? err.message : 'Error cargando categorías',
+        );
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [type]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log({ amount, type, category: selectedCategory, note });
-    navigate({
-      to: '/',
-      search: (current) => current,
-      params: (current) => current,
-    });
+    if (!amount || !selectedCategory) return;
+
+    const accessToken = window.localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const dashboardResponse = await fetch(`${API_BASE}/api/dashboard`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      if (!dashboardResponse.ok)
+        throw new Error('No se pudo obtener el tablero');
+      const { board } = await dashboardResponse.json();
+
+      const response = await fetch(`${API_BASE}/api/${type}s`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          boardId: board.id,
+          amount,
+          categoryId: selectedCategory.id,
+          note: note || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || `Error al guardar ${type}`);
+      }
+
+      navigate({
+        to: '/' as never,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -145,26 +218,36 @@ function AddMovement() {
             )}
             {showCategories && (
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {categories.map((category) => (
-                  <button
-                    type="button"
-                    key={category.id}
-                    onClick={() => {
-                      setSelectedCategory(category);
-                      setShowCategories(false);
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
-                      selectedCategory?.id === category.id
-                        ? 'border-slate-300 bg-slate-100'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className="text-2xl">{category.emoji}</span>
-                    <span className="font-semibold text-slate-800">
-                      {category.name}
-                    </span>
-                  </button>
-                ))}
+                {loading ? (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                  </div>
+                ) : categories.length === 0 ? (
+                  <p className="p-4 text-center text-sm text-slate-500">
+                    No hay categorías disponibles.
+                  </p>
+                ) : (
+                  categories.map((category) => (
+                    <button
+                      type="button"
+                      key={category.id}
+                      onClick={() => {
+                        setSelectedCategory(category);
+                        setShowCategories(false);
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
+                        selectedCategory?.id === category.id
+                          ? 'border-slate-300 bg-slate-100'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-2xl">{category.emoji}</span>
+                      <span className="font-semibold text-slate-800">
+                        {category.name}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -206,13 +289,20 @@ function AddMovement() {
             </button>
           </div>
 
+          {error && (
+            <div className="rounded-2xl bg-rose-50 p-4 text-sm font-medium text-rose-600">
+              {error}
+            </div>
+          )}
+
           <div className="pt-4 space-y-3">
             <button
               type="submit"
-              disabled={!amount || !selectedCategory}
-              className="w-full rounded-2xl bg-slate-900 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!amount || !selectedCategory || saving}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Guardar movimiento
+              {saving && <Loader2 className="h-5 w-5 animate-spin" />}
+              {saving ? 'Guardando...' : 'Guardar movimiento'}
             </button>
             <Link
               to="/"

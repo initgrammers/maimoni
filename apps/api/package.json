@@ -4,14 +4,15 @@
     "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
-    "@maimoni/auth": "workspace:*",
+    "@hono/zod-validator": "^0.7.6",
     "@maimoni/ai": "workspace:*",
+    "@maimoni/auth": "workspace:*",
     "@maimoni/db": "workspace:*",
     "@openauthjs/openauth": "latest",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
     "valibot": "^1.2.0",
-    "zod": "latest"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bun": "latest"

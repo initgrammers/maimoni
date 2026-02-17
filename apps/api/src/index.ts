@@ -1,3 +1,4 @@
+import { zValidator } from '@hono/zod-validator';
 import { extractReceiptInfo } from '@maimoni/ai';
 import {
   authSubjects,
@@ -17,6 +18,7 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { handle } from 'hono/aws-lambda';
+import { z } from 'zod';
 import { getEnv } from '../../../packages/utils/src/index';
 
 type UserContext = {
@@ -125,6 +127,24 @@ app.post('/api/auth/claim', async (c) => {
   }
 });
 
+const incomeSchema = z.object({
+  boardId: z.string().uuid(),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
+  categoryId: z.string().uuid(),
+  note: z.string().optional(),
+  date: z.string().datetime().optional(),
+});
+
+const expenseSchema = z.object({
+  boardId: z.string().uuid(),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
+  categoryId: z.string().uuid(),
+  note: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  receiptUrl: z.string().url().optional(),
+  date: z.string().datetime().optional(),
+});
+
 app.get('/api/incomes', async (c) => {
   const userId = c.get('userId');
   const boardId = c.req.query('boardId');
@@ -138,15 +158,9 @@ app.get('/api/incomes', async (c) => {
   return c.json(result);
 });
 
-app.post('/api/incomes', async (c) => {
+app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
   const userId = c.get('userId');
-  const body = (await c.req.json()) as {
-    boardId: string;
-    amount: string;
-    categoryId: string;
-    note?: string;
-    date?: string;
-  };
+  const body = c.req.valid('json');
 
   const result = await db
     .insert(incomes)
@@ -176,17 +190,9 @@ app.get('/api/expenses', async (c) => {
   return c.json(result);
 });
 
-app.post('/api/expenses', async (c) => {
+app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
   const userId = c.get('userId');
-  const body = (await c.req.json()) as {
-    boardId: string;
-    amount: string;
-    categoryId: string;
-    note?: string;
-    tags?: string[];
-    receiptUrl?: string;
-    date?: string;
-  };
+  const body = c.req.valid('json');
 
   const result = await db
     .insert(expenses)
