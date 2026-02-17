@@ -4,29 +4,29 @@
 /* deno-fmt-ignore-file */
 /* biome-ignore-all lint: auto-generated */
 
-declare module 'sst' {
+declare module "sst" {
   export interface Resource {
-    Api: {
-      name: string;
-      type: 'sst.aws.Function';
-      url: string;
-    };
-    Auth: {
-      name: string;
-      type: 'sst.aws.Function';
-      url: string;
-    };
-    MyRouter: {
-      type: 'sst.aws.Router';
-      url: string;
-    };
-    Webapp: {
-      type: 'sst.aws.TanstackStart';
-      url: string;
-    };
+    "Api": {
+      "name": string
+      "type": "sst.aws.Function"
+      "url": string
+    }
+    "Auth": {
+      "name": string
+      "type": "sst.aws.Function"
+      "url": string
+    }
+    "MyRouter": {
+      "type": "sst.aws.Router"
+      "url": string
+    }
+    "Webapp": {
+      "type": "sst.aws.TanstackStart"
+      "url": string
+    }
   }
 }
 /// <reference path="sst-env.d.ts" />
 
-import 'sst';
-export {};
+import "sst"
+export {}

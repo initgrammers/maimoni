@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { ChartColumn, House, Plus, ReceiptText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { getApiBase, startAuth } from '../lib/openauth';
 
@@ -36,6 +36,8 @@ type DisplayMovement = {
   note: string | null;
 };
 
+type Period = 'week' | 'month' | 'year';
+
 const API_BASE = getApiBase();
 
 export const Route = createFileRoute('/' as never)({
@@ -63,6 +65,7 @@ function Dashboard() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>('week');
 
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
@@ -147,38 +150,134 @@ function Dashboard() {
     );
   }, [data]);
 
-  const totals = useMemo(() => {
-    const totalIncome = movements
-      .filter((m) => m.type === 'income')
-      .reduce((sum, m) => sum + m.amount, 0);
-    const totalExpenses = movements
-      .filter((m) => m.type === 'expense')
-      .reduce((sum, m) => sum + m.amount, 0);
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    [],
+  );
+
+  const periodMovements = useMemo(() => {
+    const now = new Date();
+    if (period === 'year') {
+      return movements.filter(
+        (movement) => movement.date.getFullYear() === now.getFullYear(),
+      );
+    }
+
+    if (period === 'month') {
+      return movements.filter(
+        (movement) =>
+          movement.date.getFullYear() === now.getFullYear() &&
+          movement.date.getMonth() === now.getMonth(),
+      );
+    }
+
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const startOfWeek = new Date(now);
+    startOfWeek.setHours(0, 0, 0, 0);
+    startOfWeek.setDate(now.getDate() - diffToMonday);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    return movements.filter(
+      (movement) => movement.date >= startOfWeek && movement.date < endOfWeek,
+    );
+  }, [movements, period]);
+
+  const weeklyExpenses = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+
+    const startOfCurrentWeek = new Date(now);
+    startOfCurrentWeek.setHours(0, 0, 0, 0);
+    startOfCurrentWeek.setDate(now.getDate() - diffToMonday);
+
+    const startOfPreviousWeek = new Date(startOfCurrentWeek);
+    startOfPreviousWeek.setDate(startOfCurrentWeek.getDate() - 7);
+
+    const endOfCurrentWeek = new Date(startOfCurrentWeek);
+    endOfCurrentWeek.setDate(startOfCurrentWeek.getDate() + 7);
+
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayTotals = new Array(7).fill(0) as number[];
+    let currentTotal = 0;
+    let previousTotal = 0;
+
+    for (const movement of movements) {
+      if (movement.type !== 'expense') continue;
+
+      if (
+        movement.date >= startOfCurrentWeek &&
+        movement.date < endOfCurrentWeek
+      ) {
+        currentTotal += movement.amount;
+        const weekday = movement.date.getDay();
+        const index = weekday === 0 ? 6 : weekday - 1;
+        dayTotals[index] += movement.amount;
+      }
+
+      if (
+        movement.date >= startOfPreviousWeek &&
+        movement.date < startOfCurrentWeek
+      ) {
+        previousTotal += movement.amount;
+      }
+    }
+
+    const highest = Math.max(...dayTotals, 1);
+
     return {
-      totalIncome,
-      totalExpenses,
-      balance: totalIncome - totalExpenses,
+      labels,
+      dayTotals,
+      highest,
+      currentTotal,
+      previousTotal,
     };
   }, [movements]);
 
-  const groupedMovements = useMemo(() => {
-    return movements.reduce(
-      (groups, movement) => {
-        const dateKey = movement.date.toLocaleDateString('es-ES', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        });
-        if (!groups[dateKey]) {
-          groups[dateKey] = [];
+  const weekChange = useMemo(() => {
+    const { currentTotal, previousTotal } = weeklyExpenses;
+    if (previousTotal === 0) {
+      return currentTotal > 0 ? 100 : 0;
+    }
+    return ((currentTotal - previousTotal) / previousTotal) * 100;
+  }, [weeklyExpenses]);
+
+  const expenseCategories = useMemo(() => {
+    const grouped = periodMovements
+      .filter((movement) => movement.type === 'expense')
+      .reduce((acc, movement) => {
+        const category = movement.note?.trim() || 'General';
+        const existing = acc.get(category);
+
+        if (existing) {
+          existing.amount += movement.amount;
+          existing.entries += 1;
+          return acc;
         }
-        groups[dateKey].push(movement);
-        return groups;
-      },
-      {} as Record<string, DisplayMovement[]>,
-    );
-  }, [movements]);
+
+        acc.set(category, {
+          category,
+          amount: movement.amount,
+          entries: 1,
+        });
+
+        return acc;
+      }, new Map<
+        string,
+        { category: string; amount: number; entries: number }
+      >());
+
+    return [...grouped.values()].sort((a, b) => b.amount - a.amount);
+  }, [periodMovements]);
 
   async function continueAsAnonymous() {
     setError(null);
@@ -220,35 +319,39 @@ function Dashboard() {
   }
 
   if (!isHydrated) {
-    return <div className="min-h-screen bg-slate-950" />;
+    return <div className="min-h-screen bg-[#f7f7f5]" />;
   }
 
   if (!accessToken) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white px-5 py-10">
-        <div className="max-w-md mx-auto space-y-6">
-          <h1 className="text-3xl font-black tracking-tight">maimonei</h1>
-          <p className="text-slate-300">
+      <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
+        <div className="mx-auto max-w-md rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <h1 className="mb-2 text-3xl font-semibold tracking-tight">
+            maimonei
+          </h1>
+          <p className="mb-6 text-base text-slate-500">
             Comienza ahora sin cuenta o inicia sesion para sincronizar tus
             tableros.
           </p>
-          <button
-            className="w-full rounded-xl bg-emerald-500 px-4 py-3 font-bold text-white"
-            onClick={continueAsAnonymous}
-            type="button"
-            disabled={loading}
-          >
-            Continuar como anonimo
-          </button>
-          <button
-            className="w-full rounded-xl bg-sky-500 px-4 py-3 font-bold text-white"
-            onClick={loginAndClaim}
-            type="button"
-            disabled={loading}
-          >
-            Iniciar sesion con WhatsApp
-          </button>
-          {error && <p className="text-rose-300 text-sm">{error}</p>}
+          <div className="space-y-3">
+            <button
+              className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
+              onClick={continueAsAnonymous}
+              type="button"
+              disabled={loading}
+            >
+              Continuar como anonimo
+            </button>
+            <button
+              className="w-full rounded-2xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-900"
+              onClick={loginAndClaim}
+              type="button"
+              disabled={loading}
+            >
+              Iniciar sesion con WhatsApp
+            </button>
+          </div>
+          {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
         </div>
       </div>
     );
@@ -256,149 +359,169 @@ function Dashboard() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white px-5 py-10">
-        <div className="max-w-md mx-auto space-y-4">
-          <p className="text-slate-300 text-sm">
+      <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
+        <div className="mx-auto max-w-md rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <p className="text-sm text-slate-500">
             {loading ? 'Cargando dashboard...' : 'Preparando dashboard...'}
           </p>
-          {error && <p className="text-rose-300 text-sm">{error}</p>}
+          {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <header className="px-5 pt-8 pb-6">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Wallet className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              {data.board.name}
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            {anonymousId && (
-              <button
-                type="button"
-                onClick={loginAndClaim}
-                disabled={loading}
-                className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+    <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
+      <div className="mx-auto w-full max-w-md px-5 pb-28 pt-8">
+        <section className="mb-6">
+          <div className="rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
+              {currencyFormatter.format(weeklyExpenses.currentTotal)}
+            </p>
+            <p className="flex items-center gap-2 text-base text-slate-400">
+              Total spent this week
+              <span
+                className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
+                  weekChange >= 0
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-rose-100 text-rose-700'
+                }`}
               >
-                Iniciar sesion
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white"
-            >
-              Cerrar sesion
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = '/add';
-              }}
-              className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-violet-500/30 active:scale-95 transition-transform"
-            >
-              <Plus className="w-6 h-6 text-white" strokeWidth={3} />
-            </button>
-          </div>
-        </div>
+                {weekChange >= 0 ? '↑' : '↓'} {Math.abs(weekChange).toFixed(0)}%
+              </span>
+            </p>
 
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-slate-700/50 p-6 shadow-2xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-violet-500/10" />
-          <div className="relative">
-            <p className="text-sm font-medium text-slate-400 mb-2 tracking-wide uppercase">
-              Balance Disponible
-            </p>
-            <p className="text-5xl font-black text-white mb-6 tracking-tight">
-              ${totals.balance.toFixed(2)}
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Ingresos</p>
-                  <p className="text-lg font-bold text-emerald-400">
-                    ${totals.totalIncome.toFixed(2)}
+            <div className="mt-7 grid grid-cols-7 items-end gap-2">
+              {weeklyExpenses.dayTotals.map((amount, index) => (
+                <div key={weeklyExpenses.labels[index]} className="text-center">
+                  <div className="mx-auto mb-2 flex h-28 w-7 items-end overflow-hidden rounded-xl bg-slate-100">
+                    <div
+                      className="w-full rounded-xl bg-slate-900 transition-all duration-300"
+                      style={{
+                        height: `${Math.max(
+                          12,
+                          (amount / weeklyExpenses.highest) * 100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs font-medium text-slate-400">
+                    {weeklyExpenses.labels[index]}
                   </p>
                 </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
-                  <TrendingDown className="w-5 h-5 text-rose-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Gastos</p>
-                  <p className="text-lg font-bold text-rose-400">
-                    ${totals.totalExpenses.toFixed(2)}
-                  </p>
-                </div>
-              </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
+              {(['week', 'month', 'year'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    setPeriod(option);
+                  }}
+                  className={`flex-1 rounded-xl px-2 py-2 capitalize transition-colors ${
+                    period === option
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      </header>
+        </section>
 
-      <main className="px-5 pb-8">
-        <h2 className="text-lg font-bold text-white mb-4 tracking-tight">
-          Movimientos
-        </h2>
+        <main className="space-y-2 pb-3">
+          {expenseCategories.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
+              No hay gastos en este periodo.
+            </div>
+          )}
 
-        <div className="space-y-6">
-          {Object.entries(groupedMovements).map(([date, items]) => (
-            <div key={date}>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-1">
-                {date}
-              </p>
-              <div className="space-y-2">
-                {items.map((movement) => (
-                  <div
-                    key={movement.id}
-                    className="group relative overflow-hidden rounded-2xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="font-semibold text-white truncate">
-                        {movement.type === 'income' ? 'Ingreso' : 'Gasto'}
-                      </p>
-                      <p
-                        className={`text-lg font-black flex-shrink-0 ${
-                          movement.type === 'income'
-                            ? 'text-emerald-400'
-                            : 'text-rose-400'
-                        }`}
-                      >
-                        {movement.type === 'income' ? '+' : '-'}$
-                        {movement.amount.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span>
-                        {movement.date.toLocaleTimeString('es-ES', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                      {movement.note && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate">{movement.note}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
+          {expenseCategories.map((category) => (
+            <div
+              key={category.category}
+              className="flex items-center justify-between border-b border-slate-200 py-4"
+            >
+              <div className="min-w-0 pr-3">
+                <p className="truncate text-lg font-medium text-slate-800">
+                  {category.category}
+                </p>
+                <p className="text-sm text-slate-400">
+                  {category.entries}{' '}
+                  {category.entries === 1 ? 'entry' : 'entries'}
+                </p>
               </div>
+              <p className="text-xl font-semibold text-slate-900">
+                {currencyFormatter.format(category.amount)}
+              </p>
             </div>
           ))}
+        </main>
+
+        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+
+        <button
+          type="button"
+          onClick={logout}
+          className="mt-4 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+        >
+          Cerrar sesion
+        </button>
+
+        {anonymousId && (
+          <button
+            type="button"
+            onClick={loginAndClaim}
+            disabled={loading}
+            className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            Iniciar sesion para sincronizar
+          </button>
+        )}
+      </div>
+
+      <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-4 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between">
+          <button
+            type="button"
+            className="rounded-2xl p-2 text-slate-400"
+            aria-label="Dashboard"
+          >
+            <House className="h-6 w-6" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/add';
+            }}
+            className="rounded-2xl bg-slate-900 p-3 text-white"
+            aria-label="Agregar movimiento"
+          >
+            <Plus className="h-5 w-5" strokeWidth={3} />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-2xl p-2 text-slate-400"
+              aria-label="Resumen"
+            >
+              <ChartColumn className="h-6 w-6" />
+            </button>
+            <button
+              type="button"
+              className="rounded-2xl p-2 text-slate-400"
+              aria-label="Movimientos"
+            >
+              <ReceiptText className="h-6 w-6" />
+            </button>
+          </div>
         </div>
-      </main>
+      </nav>
     </div>
   );
 }

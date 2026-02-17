@@ -25,9 +25,9 @@ function AuthCallback() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-5 py-10">
-      <div className="max-w-md mx-auto space-y-4">
-        <p className="text-slate-300 text-sm">
+    <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
+      <div className="mx-auto max-w-md rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+        <p className="text-sm text-slate-500">
           {error ?? 'Completando autenticacion...'}
         </p>
       </div>

@@ -38,25 +38,25 @@ function AddMovement() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <header className="px-5 pt-8 pb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-black text-white tracking-tight">
+    <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
+      <header className="mx-auto flex w-full max-w-md items-center justify-between px-5 pb-6 pt-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Nuevo movimiento
         </h1>
         <Link
           to="/"
           search={(current) => current}
           params={(current) => current}
-          className="w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center active:scale-95 transition-transform"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white transition-transform active:scale-95"
         >
-          <X className="w-5 h-5 text-slate-400" />
+          <X className="h-5 w-5 text-slate-500" />
         </Link>
       </header>
 
-      <main className="px-5 pb-8">
+      <main className="mx-auto w-full max-w-md px-5 pb-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Tipo
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -66,16 +66,13 @@ function AddMovement() {
                   setType('expense');
                   setSelectedCategory(null);
                 }}
-                className={`relative overflow-hidden rounded-2xl p-4 font-bold transition-all active:scale-95 ${
+                className={`rounded-2xl border p-4 font-semibold transition-all active:scale-95 ${
                   type === 'expense'
-                    ? 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-xl shadow-rose-500/30'
-                    : 'bg-slate-800/60 text-slate-400 border border-slate-700/50'
+                    ? 'border-rose-300 bg-rose-50 text-rose-700'
+                    : 'border-slate-200 bg-white text-slate-500'
                 }`}
               >
-                {type === 'expense' && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                )}
-                <span className="relative">Gasto</span>
+                Gasto
               </button>
               <button
                 type="button"
@@ -83,29 +80,26 @@ function AddMovement() {
                   setType('income');
                   setSelectedCategory(null);
                 }}
-                className={`relative overflow-hidden rounded-2xl p-4 font-bold transition-all active:scale-95 ${
+                className={`rounded-2xl border p-4 font-semibold transition-all active:scale-95 ${
                   type === 'income'
-                    ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-500/30'
-                    : 'bg-slate-800/60 text-slate-400 border border-slate-700/50'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-slate-200 bg-white text-slate-500'
                 }`}
               >
-                {type === 'income' && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                )}
-                <span className="relative">Ingreso</span>
+                Ingreso
               </button>
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <label
               htmlFor={amountInputId}
-              className="block text-sm font-semibold text-slate-400 uppercase tracking-wider"
+              className="block text-sm font-semibold uppercase tracking-wider text-slate-500"
             >
               Monto
             </label>
             <div className="relative">
-              <span className="absolute left-5 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-600">
+              <span className="absolute left-5 top-1/2 -translate-y-1/2 text-3xl font-bold text-slate-400">
                 $
               </span>
               <input
@@ -116,20 +110,20 @@ function AddMovement() {
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 required
-                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-2xl pl-12 pr-5 py-5 text-3xl font-black text-white placeholder:text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 py-5 text-3xl font-semibold text-slate-900 placeholder:text-slate-300 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
               />
             </div>
           </div>
 
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Categoría
             </p>
             {!showCategories && !selectedCategory && (
               <button
                 type="button"
                 onClick={() => setShowCategories(true)}
-                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 text-left text-slate-500 font-medium active:scale-[0.98] transition-all"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98]"
               >
                 Seleccionar categoría
               </button>
@@ -138,15 +132,15 @@ function AddMovement() {
               <button
                 type="button"
                 onClick={() => setShowCategories(true)}
-                className="w-full bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/50 rounded-2xl p-5 flex items-center justify-between active:scale-[0.98] transition-all"
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98]"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{selectedCategory.emoji}</span>
-                  <span className="font-bold text-white">
+                  <span className="font-semibold text-slate-800">
                     {selectedCategory.name}
                   </span>
                 </div>
-                <Check className="w-5 h-5 text-violet-400" />
+                <Check className="h-5 w-5 text-slate-500" />
               </button>
             )}
             {showCategories && (
@@ -159,14 +153,14 @@ function AddMovement() {
                       setSelectedCategory(category);
                       setShowCategories(false);
                     }}
-                    className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-[0.98] ${
+                    className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
                       selectedCategory?.id === category.id
-                        ? 'bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/50'
-                        : 'bg-slate-800/60 border border-slate-700/50 hover:border-slate-600'
+                        ? 'border-slate-300 bg-slate-100'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <span className="text-2xl">{category.emoji}</span>
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-slate-800">
                       {category.name}
                     </span>
                   </button>
@@ -175,10 +169,10 @@ function AddMovement() {
             )}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <label
               htmlFor={noteInputId}
-              className="block text-sm font-semibold text-slate-400 uppercase tracking-wider"
+              className="block text-sm font-semibold uppercase tracking-wider text-slate-500"
             >
               Nota (opcional)
             </label>
@@ -188,23 +182,23 @@ function AddMovement() {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ej: Almuerzo con el equipo"
-              className="w-full bg-slate-800/60 border border-slate-700/50 rounded-2xl px-5 py-4 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 placeholder:text-slate-400 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
 
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Escanear recibo
             </p>
             <button
               type="button"
-              className="w-full bg-gradient-to-br from-slate-800/80 to-slate-900/80 border-2 border-dashed border-slate-700 rounded-2xl p-8 flex flex-col items-center gap-3 active:scale-[0.98] transition-all hover:border-violet-500/50"
+              className="flex w-full flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 transition-all active:scale-[0.98] hover:border-slate-400"
             >
-              <div className="w-14 h-14 rounded-2xl bg-violet-500/20 flex items-center justify-center">
-                <Scan className="w-7 h-7 text-violet-400" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-200">
+                <Scan className="h-7 w-7 text-slate-600" />
               </div>
               <div className="text-center">
-                <p className="font-semibold text-white mb-1">IA Scan</p>
+                <p className="mb-1 font-semibold text-slate-800">IA Scan</p>
                 <p className="text-sm text-slate-500">
                   Sube una foto y detectaremos el monto automáticamente
                 </p>
@@ -216,7 +210,7 @@ function AddMovement() {
             <button
               type="submit"
               disabled={!amount || !selectedCategory}
-              className="w-full bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl py-5 font-black text-white text-lg shadow-xl shadow-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+              className="w-full rounded-2xl bg-slate-900 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Guardar movimiento
             </button>
@@ -224,7 +218,7 @@ function AddMovement() {
               to="/"
               search={(current) => current}
               params={(current) => current}
-              className="block w-full bg-slate-800/60 border border-slate-700/50 rounded-2xl py-5 font-bold text-slate-400 text-center active:scale-[0.98] transition-all"
+              className="block w-full rounded-2xl border border-slate-300 bg-white py-5 text-center font-semibold text-slate-600 transition-all active:scale-[0.98]"
             >
               Cancelar
             </Link>
