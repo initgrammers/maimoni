@@ -4,8 +4,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "@llamaindex/cloud": "^4.1.3",
-    "groq-sdk": "latest",
-    "llamaindex": "latest"
+    "@llamaindex/cloud": "^2.0.0",
+    "groq-sdk": "^0.15.0"
   }
 }

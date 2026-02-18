@@ -47,26 +47,18 @@
         "board_members_board_id_boards_id_fk": {
           "name": "board_members_board_id_boards_id_fk",
           "tableFrom": "board_members",
-          "columnsFrom": [
-            "board_id"
-          ],
+          "columnsFrom": ["board_id"],
           "tableTo": "boards",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
         "board_members_user_id_users_id_fk": {
           "name": "board_members_user_id_users_id_fk",
           "tableFrom": "board_members",
-          "columnsFrom": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
           "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -133,13 +125,9 @@
         "boards_owner_id_users_id_fk": {
           "name": "boards_owner_id_users_id_fk",
           "tableFrom": "boards",
-          "columnsFrom": [
-            "owner_id"
-          ],
+          "columnsFrom": ["owner_id"],
           "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -303,39 +291,27 @@
         "expenses_board_id_boards_id_fk": {
           "name": "expenses_board_id_boards_id_fk",
           "tableFrom": "expenses",
-          "columnsFrom": [
-            "board_id"
-          ],
+          "columnsFrom": ["board_id"],
           "tableTo": "boards",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
         "expenses_user_id_users_id_fk": {
           "name": "expenses_user_id_users_id_fk",
           "tableFrom": "expenses",
-          "columnsFrom": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
           "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
         "expenses_category_id_categories_id_fk": {
           "name": "expenses_category_id_categories_id_fk",
           "tableFrom": "expenses",
-          "columnsFrom": [
-            "category_id"
-          ],
+          "columnsFrom": ["category_id"],
           "tableTo": "categories",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -421,39 +397,27 @@
         "incomes_board_id_boards_id_fk": {
           "name": "incomes_board_id_boards_id_fk",
           "tableFrom": "incomes",
-          "columnsFrom": [
-            "board_id"
-          ],
+          "columnsFrom": ["board_id"],
           "tableTo": "boards",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
         "incomes_user_id_users_id_fk": {
           "name": "incomes_user_id_users_id_fk",
           "tableFrom": "incomes",
-          "columnsFrom": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
           "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         },
         "incomes_category_id_categories_id_fk": {
           "name": "incomes_category_id_categories_id_fk",
           "tableFrom": "incomes",
-          "columnsFrom": [
-            "category_id"
-          ],
+          "columnsFrom": ["category_id"],
           "tableTo": "categories",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -527,13 +491,9 @@
         "invitations_board_id_boards_id_fk": {
           "name": "invitations_board_id_boards_id_fk",
           "tableFrom": "invitations",
-          "columnsFrom": [
-            "board_id"
-          ],
+          "columnsFrom": ["board_id"],
           "tableTo": "boards",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -595,9 +555,7 @@
       "uniqueConstraints": {
         "users_phone_number_unique": {
           "name": "users_phone_number_unique",
-          "columns": [
-            "phone_number"
-          ],
+          "columns": ["phone_number"],
           "nullsNotDistinct": false
         }
       },
@@ -610,10 +568,7 @@
     "public.movement_type": {
       "name": "movement_type",
       "schema": "public",
-      "values": [
-        "income",
-        "expense"
-      ]
+      "values": ["income", "expense"]
     }
   },
   "schemas": {},

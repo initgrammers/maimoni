@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Check, Loader2, X } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { Camera, Check, Loader2, X } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, MovementType } from '../types';
@@ -28,10 +28,21 @@ async function fetchCategories(accessToken: string, type: MovementType) {
   return (await response.json()) as Category[];
 }
 
+interface ScanResponse {
+  total_amount: number;
+  date: string;
+  merchant_name: string;
+  category: string;
+  type: 'expense' | 'income';
+  note: string;
+  items: Array<{ name: string; price: number }>;
+}
+
 function AddMovement() {
   const navigate = useNavigate();
   const amountInputId = useId();
   const noteInputId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<MovementType>('expense');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -48,6 +59,10 @@ function AddMovement() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [pendingScanCategory, setPendingScanCategory] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     const accessToken = window.localStorage.getItem('accessToken');
@@ -74,6 +89,70 @@ function AddMovement() {
         setCategoriesLoadingType(null);
       });
   }, [type]);
+
+  useEffect(() => {
+    if (!pendingScanCategory || categories.length === 0) return;
+
+    const matched = categories.find(
+      (cat) => cat.name.toLowerCase() === pendingScanCategory.toLowerCase(),
+    );
+    if (matched) {
+      setSelectedCategory(matched);
+      setShowCategories(false);
+    }
+    setPendingScanCategory(null);
+  }, [categories, pendingScanCategory]);
+
+  const handleScanFile = async (file: File) => {
+    const accessToken = window.localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    setScanning(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_BASE}/api/scan`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || 'Error al escanear el recibo');
+      }
+
+      const result = (await response.json()) as ScanResponse;
+
+      setAmount(result.total_amount.toString());
+      setNote(result.note || result.merchant_name || '');
+
+      if (result.type !== type) {
+        setType(result.type);
+        setPendingScanCategory(result.category);
+      } else {
+        const matched = categories.find(
+          (cat) => cat.name.toLowerCase() === result.category.toLowerCase(),
+        );
+        if (matched) {
+          setSelectedCategory(matched);
+          setShowCategories(false);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al escanear');
+    } finally {
+      setScanning(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +219,37 @@ function AddMovement() {
 
       <main className="mx-auto w-full max-w-md px-5 pb-8">
         <form onSubmit={handleSubmit} className="space-y-6">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleScanFile(file);
+            }}
+          />
+
+          <button
+            type="button"
+            disabled={scanning}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-violet-300 bg-violet-50 p-5 font-semibold text-violet-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {scanning ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Analizando recibo...
+              </>
+            ) : (
+              <>
+                <Camera className="h-5 w-5" />
+                Escanear recibo
+              </>
+            )}
+          </button>
+
           <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
               Tipo

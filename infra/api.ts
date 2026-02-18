@@ -10,4 +10,5 @@ export const api = new sst.aws.Function('Api', {
     ...getEnv(['DATABASE_URL', 'GROQ_API_KEY', 'LLAMA_CLOUD_API_KEY']),
     AUTH_URL: auth.url,
   },
+  timeout: '60 seconds',
 });

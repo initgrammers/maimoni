@@ -43,7 +43,7 @@ Financial management app ("Maimoni") using **Bun**, **SST Ion**, and **TanStack 
 
 ## ANTI-PATTERNS
 - **No ESLint/Prettier**: Biome is the single source of truth for style.
-- **No Manual Env Access**: Avoid `process.env` directly in infra; use `getEnv`.
+- **No Manual Env Access**: Never use `process.env` directly anywhere. Always use `getEnv` from `packages/utils/src/index.ts` (imported via relative path).
 - **Mock Data**: `webapp/src/routes/index.tsx` contains mocks; replace with loaders/API calls for production.
 
 ## COMMANDS

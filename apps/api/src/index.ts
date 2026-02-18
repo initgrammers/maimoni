@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import type { CategoryInput } from '@maimoni/ai';
 import { extractReceiptInfo } from '@maimoni/ai';
 import {
   authSubjects,
@@ -263,16 +264,55 @@ app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
   return c.json(result[0]);
 });
 
-app.post('/api/expenses/scan', async (c) => {
+app.post('/api/scan', async (c) => {
   const formData = await c.req.formData();
   const file = formData.get('file') as File;
 
   if (!file) return c.json({ error: 'No file provided' }, 400);
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const scanResult = await extractReceiptInfo(buffer, file.name);
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return c.json({ error: 'File too large. Maximum size is 10MB.' }, 400);
+  }
 
-  return c.json(scanResult);
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'application/pdf',
+  ];
+  if (!allowedTypes.includes(file.type)) {
+    return c.json(
+      { error: 'Unsupported file type. Use JPEG, PNG, WebP, HEIC, or PDF.' },
+      400,
+    );
+  }
+
+  try {
+    const allCategories = await db.select().from(categories);
+    const categoryInputs: CategoryInput[] = allCategories.map((c) => ({
+      name: c.name,
+      type: c.type,
+    }));
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const scanResult = await extractReceiptInfo(
+      buffer,
+      file.name,
+      categoryInputs,
+    );
+    return c.json(scanResult);
+  } catch (error) {
+    console.error('Receipt scan failed:', error);
+    return c.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Failed to process receipt',
+      },
+      500,
+    );
+  }
 });
 
 app.get('/api/categories', async (c) => {
