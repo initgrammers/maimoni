@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Check, Loader2, Scan, X } from 'lucide-react';
+import { Check, Loader2, X } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
@@ -35,11 +35,16 @@ function AddMovement() {
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<MovementType>('expense');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoadingType, setCategoriesLoadingType] =
+    useState<MovementType | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
     null,
   );
+  const [selectedSubcategory, setSelectedSubcategory] =
+    useState<Category | null>(null);
   const [note, setNote] = useState('');
   const [showCategories, setShowCategories] = useState(false);
+  const [showSubcategories, setShowSubcategories] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +54,12 @@ function AddMovement() {
     if (!accessToken) return;
 
     setLoading(true);
+    setCategoriesLoadingType(type);
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setShowCategories(false);
+    setShowSubcategories(false);
+
     fetchCategories(accessToken, type)
       .then((data) => {
         setCategories(data);
@@ -60,6 +71,7 @@ function AddMovement() {
       })
       .finally(() => {
         setLoading(false);
+        setCategoriesLoadingType(null);
       });
   }, [type]);
 
@@ -90,7 +102,7 @@ function AddMovement() {
         body: JSON.stringify({
           boardId: board.id,
           amount,
-          categoryId: selectedCategory.id,
+          categoryId: selectedSubcategory?.id || selectedCategory.id,
           note: note || undefined,
         }),
       });
@@ -138,6 +150,7 @@ function AddMovement() {
                 onClick={() => {
                   setType('expense');
                   setSelectedCategory(null);
+                  setSelectedSubcategory(null);
                 }}
                 className={`rounded-2xl border p-4 font-semibold transition-all active:scale-95 ${
                   type === 'expense'
@@ -152,6 +165,7 @@ function AddMovement() {
                 onClick={() => {
                   setType('income');
                   setSelectedCategory(null);
+                  setSelectedSubcategory(null);
                 }}
                 className={`rounded-2xl border p-4 font-semibold transition-all active:scale-95 ${
                   type === 'income'
@@ -196,16 +210,20 @@ function AddMovement() {
               <button
                 type="button"
                 onClick={() => setShowCategories(true)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98]"
+                disabled={loading}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                Seleccionar categoría
+                {loading ? 'Cargando...' : 'Seleccionar categoría'}
               </button>
             )}
             {!showCategories && selectedCategory && (
               <button
                 type="button"
-                onClick={() => setShowCategories(true)}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98]"
+                onClick={() => {
+                  setShowCategories(true);
+                }}
+                disabled={loading}
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{selectedCategory.emoji}</span>
@@ -218,7 +236,8 @@ function AddMovement() {
             )}
             {showCategories && (
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {loading ? (
+                {loading ||
+                (categoriesLoadingType && categoriesLoadingType !== type) ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
                   </div>
@@ -233,6 +252,7 @@ function AddMovement() {
                       key={category.id}
                       onClick={() => {
                         setSelectedCategory(category);
+                        setSelectedSubcategory(null);
                         setShowCategories(false);
                       }}
                       className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
@@ -252,6 +272,79 @@ function AddMovement() {
             )}
           </div>
 
+          {selectedCategory &&
+            selectedCategory.subcategories &&
+            selectedCategory.subcategories.length > 0 && (
+              <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+                <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                  Subcategoría (opcional)
+                </p>
+                {!showSubcategories && !selectedSubcategory && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSubcategories(true)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98]"
+                  >
+                    Seleccionar subcategoría
+                  </button>
+                )}
+                {!showSubcategories && selectedSubcategory && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSubcategories(true)}
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">
+                        {selectedSubcategory.emoji}
+                      </span>
+                      <span className="font-semibold text-slate-800">
+                        {selectedSubcategory.name}
+                      </span>
+                    </div>
+                    <Check className="h-5 w-5 text-slate-500" />
+                  </button>
+                )}
+                {showSubcategories && (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubcategory(null);
+                        setShowSubcategories(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-slate-200 p-4 transition-all hover:bg-slate-50 active:scale-[0.98]"
+                    >
+                      <span className="text-xl">✨</span>
+                      <span className="font-medium text-slate-500">
+                        Ninguna (solo {selectedCategory.name})
+                      </span>
+                    </button>
+                    {selectedCategory.subcategories.map((sub: any) => (
+                      <button
+                        type="button"
+                        key={sub.id}
+                        onClick={() => {
+                          setSelectedSubcategory(sub);
+                          setShowSubcategories(false);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
+                          selectedSubcategory?.id === sub.id
+                            ? 'border-slate-300 bg-slate-100'
+                            : 'border-slate-200 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="text-xl">{sub.emoji}</span>
+                        <span className="font-semibold text-slate-800">
+                          {sub.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
           <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <label
               htmlFor={noteInputId}
@@ -267,26 +360,6 @@ function AddMovement() {
               placeholder="Ej: Almuerzo con el equipo"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 placeholder:text-slate-400 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
-          </div>
-
-          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-              Escanear recibo
-            </p>
-            <button
-              type="button"
-              className="flex w-full flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 transition-all active:scale-[0.98] hover:border-slate-400"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-200">
-                <Scan className="h-7 w-7 text-slate-600" />
-              </div>
-              <div className="text-center">
-                <p className="mb-1 font-semibold text-slate-800">IA Scan</p>
-                <p className="text-sm text-slate-500">
-                  Sube una foto y detectaremos el monto automáticamente
-                </p>
-              </div>
-            </button>
           </div>
 
           {error && (

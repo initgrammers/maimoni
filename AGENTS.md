@@ -36,6 +36,10 @@ Financial management app ("Maimoni") using **Bun**, **SST Ion**, and **TanStack 
 - **Imports**: Use `@/` alias in `webapp` and workspace references (`@maimoni/*`) elsewhere.
 - **Environment**: All environment variables must be declared in `packages/utils/src/index.ts` via `getEnv`.
 - **Routing**: TanStack Start file-based routing.
+- **Database**: 
+  - Manage ALL schema changes via `drizzle-kit generate` and `migrate`.
+  - Migrations MUST be idempotent: Use `CREATE TABLE IF NOT EXISTS`, `DO $$` blocks for enums/constraints, and `ON CONFLICT DO NOTHING` for seeds.
+  - Data seeding (like categories) MUST be handled as custom SQL migrations in `packages/db/drizzle/`.
 
 ## ANTI-PATTERNS
 - **No ESLint/Prettier**: Biome is the single source of truth for style.

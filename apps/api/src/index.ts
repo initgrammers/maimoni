@@ -162,6 +162,16 @@ app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
   const userId = c.get('userId');
   const body = c.req.valid('json');
 
+  const [category] = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.id, body.categoryId))
+    .limit(1);
+
+  if (!category || category.type !== 'income') {
+    return c.json({ error: 'Categoría de ingreso inválida' }, 400);
+  }
+
   const result = await db
     .insert(incomes)
     .values({
@@ -170,6 +180,37 @@ app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
       amount: body.amount,
       categoryId: body.categoryId,
       note: body.note,
+      date: body.date ? new Date(body.date) : new Date(),
+    })
+    .returning();
+
+  return c.json(result[0]);
+});
+
+app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
+  const userId = c.get('userId');
+  const body = c.req.valid('json');
+
+  const [category] = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.id, body.categoryId))
+    .limit(1);
+
+  if (!category || category.type !== 'expense') {
+    return c.json({ error: 'Categoría de gasto inválida' }, 400);
+  }
+
+  const result = await db
+    .insert(expenses)
+    .values({
+      boardId: body.boardId,
+      userId,
+      amount: body.amount,
+      categoryId: body.categoryId,
+      note: body.note,
+      tags: body.tags,
+      receiptUrl: body.receiptUrl,
       date: body.date ? new Date(body.date) : new Date(),
     })
     .returning();
@@ -193,6 +234,17 @@ app.get('/api/expenses', async (c) => {
 app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
   const userId = c.get('userId');
   const body = c.req.valid('json');
+
+  // Validar que la categoría sea de tipo 'expense'
+  const [category] = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.id, body.categoryId))
+    .limit(1);
+
+  if (!category || category.type !== 'expense') {
+    return c.json({ error: 'Categoría de gasto inválida' }, 400);
+  }
 
   const result = await db
     .insert(expenses)
@@ -225,15 +277,27 @@ app.post('/api/expenses/scan', async (c) => {
 
 app.get('/api/categories', async (c) => {
   const type = c.req.query('type');
+  let query = db.select().from(categories);
+
   if (type === 'income' || type === 'expense') {
-    const result = await db
-      .select()
-      .from(categories)
-      .where(eq(categories.type, type));
-    return c.json(result);
+    // @ts-expect-error - drizzle type complexity
+    query = query.where(eq(categories.type, type));
   }
 
-  const result = await db.select().from(categories);
+  const allCategories = await query;
+
+  const parentCategories = allCategories.filter((cat) => !cat.parentId);
+  const result = parentCategories.map((parent) => ({
+    ...parent,
+    subcategories: allCategories
+      .filter((cat) => cat.parentId === parent.id)
+      .map((sub) => ({
+        id: sub.id,
+        name: sub.name,
+        emoji: sub.emoji,
+      })),
+  }));
+
   return c.json(result);
 });
 

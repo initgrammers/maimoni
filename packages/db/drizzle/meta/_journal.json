@@ -8,6 +8,20 @@
       "when": 1771287130221,
       "tag": "0000_youthful_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771387070013,
+      "tag": "0001_seed_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771387769103,
+      "tag": "0002_fix_hierarchical_categories",
+      "breakpoints": true
     }
   ]
 }

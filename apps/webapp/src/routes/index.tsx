@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChartColumn, House, Plus, ReceiptText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { getApiBase, startAuth } from '../lib/openauth';
@@ -74,7 +74,7 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isHydrated || !accessToken || loading) {
+    if (!isHydrated || !accessToken || data || loading) {
       return;
     }
 
@@ -124,7 +124,7 @@ function Dashboard() {
       .finally(() => {
         setLoading(false);
       });
-  }, [accessToken, isHydrated, loading]);
+  }, [accessToken, data, isHydrated, loading]);
 
   const movements = useMemo<DisplayMovement[]>(() => {
     if (!data) return [];
@@ -493,16 +493,15 @@ function Dashboard() {
             <House className="h-6 w-6" />
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = '/add';
-            }}
+          <Link
+            to="/add"
+            search={(current) => current}
+            params={(current) => current}
             className="rounded-2xl bg-slate-900 p-3 text-white"
             aria-label="Agregar movimiento"
           >
             <Plus className="h-5 w-5" strokeWidth={3} />
-          </button>
+          </Link>
 
           <div className="flex items-center gap-2">
             <button
