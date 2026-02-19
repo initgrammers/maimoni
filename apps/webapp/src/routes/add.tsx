@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
@@ -21,9 +22,13 @@ import {
 } from '../components/ui/drawer';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
-import type { Category, MovementType } from '../types';
+import type { Category, MovementType, Subcategory } from '../types';
 
 const API_BASE = getApiBase();
+const dashboardQueryKey = (accessToken: string) =>
+  ['dashboard', accessToken] as const;
+const categoriesQueryKey = (accessToken: string, type: MovementType) =>
+  ['categories', accessToken, type] as const;
 
 export const Route = createFileRoute('/add' as never)({
   beforeLoad: () => {
@@ -40,10 +45,46 @@ async function fetchCategories(accessToken: string, type: MovementType) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to load categories');
+    throw new Error('No se pudieron cargar las categorías');
   }
 
   return (await response.json()) as Category[];
+}
+
+async function fetchDashboard(accessToken: string) {
+  const response = await fetch(`${API_BASE}/api/dashboard`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('No se pudo obtener el tablero');
+  }
+
+  return (await response.json()) as { board: { id: string } };
+}
+
+async function scanReceipt(accessToken: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/api/scan`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'Error al escanear el recibo');
+  }
+
+  return (await response.json()) as ScanResponse;
 }
 
 interface ScanResponse {
@@ -60,10 +101,18 @@ dayjs.locale('es');
 
 function AddMovement() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const amountInputId = useId();
   const dateInputId = useId();
   const noteInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [accessToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return window.localStorage.getItem('accessToken');
+  });
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => {
     const now = new Date();
@@ -77,51 +126,104 @@ function AddMovement() {
   useEffect(() => {
     setMonth(new Date(`${date}T12:00:00`));
   }, [date]);
+
   const [type, setType] = useState<MovementType>('expense');
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoadingType, setCategoriesLoadingType] =
-    useState<MovementType | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
     null,
   );
   const [selectedSubcategory, setSelectedSubcategory] =
-    useState<Category | null>(null);
+    useState<Subcategory | null>(null);
   const [note, setNote] = useState('');
   const [showCategories, setShowCategories] = useState(false);
   const [showSubcategories, setShowSubcategories] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
   const [pendingScanCategory, setPendingScanCategory] = useState<string | null>(
     null,
   );
 
-  useEffect(() => {
-    const accessToken = window.localStorage.getItem('accessToken');
-    if (!accessToken) return;
+  const categoriesQuery = useQuery<Category[], Error>({
+    queryKey: accessToken
+      ? categoriesQueryKey(accessToken, type)
+      : (['categories', 'guest', type] as const),
+    queryFn: () => {
+      if (!accessToken) {
+        throw new Error('No hay sesión activa');
+      }
 
-    setLoading(true);
-    setCategoriesLoadingType(type);
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setShowCategories(false);
-    setShowSubcategories(false);
+      return fetchCategories(accessToken, type);
+    },
+    enabled: Boolean(accessToken),
+    staleTime: 5 * 60_000,
+  });
 
-    fetchCategories(accessToken, type)
-      .then((data) => {
-        setCategories(data);
-      })
-      .catch((err) => {
-        setError(
-          err instanceof Error ? err.message : 'Error cargando categorías',
-        );
-      })
-      .finally(() => {
-        setLoading(false);
-        setCategoriesLoadingType(null);
+  const categories = categoriesQuery.data ?? [];
+  const isCategoriesLoading = Boolean(accessToken) && categoriesQuery.isPending;
+
+  const scanMutation = useMutation<ScanResponse, Error, File>({
+    mutationFn: (file) => {
+      if (!accessToken) {
+        throw new Error('No hay sesión activa');
+      }
+
+      return scanReceipt(accessToken, file);
+    },
+  });
+
+  const createMovementMutation = useMutation<
+    void,
+    Error,
+    {
+      movementType: MovementType;
+      amount: string;
+      categoryId: string;
+      note?: string;
+      date: string;
+    }
+  >({
+    mutationFn: async ({ movementType, amount, categoryId, note, date }) => {
+      if (!accessToken) {
+        throw new Error('No hay sesión activa');
+      }
+
+      const dashboard = await queryClient.fetchQuery({
+        queryKey: dashboardQueryKey(accessToken),
+        queryFn: () => fetchDashboard(accessToken),
       });
-  }, [type]);
+
+      const response = await fetch(`${API_BASE}/api/${movementType}s`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          boardId: dashboard.board.id,
+          amount,
+          categoryId,
+          note,
+          date,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(result?.error ?? `Error al guardar ${movementType}`);
+      }
+    },
+    onSuccess: async () => {
+      if (accessToken) {
+        await queryClient.invalidateQueries({
+          queryKey: dashboardQueryKey(accessToken),
+        });
+      }
+
+      navigate({
+        to: '/' as never,
+      });
+    },
+  });
 
   useEffect(() => {
     if (!pendingScanCategory || categories.length === 0) return;
@@ -131,36 +233,17 @@ function AddMovement() {
     );
     if (matched) {
       setSelectedCategory(matched);
-      setShowCategories(false);
     }
     setPendingScanCategory(null);
   }, [categories, pendingScanCategory]);
 
   const handleScanFile = async (file: File) => {
-    const accessToken = window.localStorage.getItem('accessToken');
     if (!accessToken) return;
 
-    setScanning(true);
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`${API_BASE}/api/scan`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || 'Error al escanear el recibo');
-      }
-
-      const result = (await response.json()) as ScanResponse;
+      const result = await scanMutation.mutateAsync(file);
 
       setAmount(result.total_amount.toString());
       if (result.date) {
@@ -170,12 +253,16 @@ function AddMovement() {
             setDate(parsedDate.toISOString().split('T')[0]);
           }
         } catch (e) {
-          console.error('Error parsing scanned date:', e);
+          console.error('Error al parsear la fecha escaneada:', e);
         }
       }
       setNote(result.note || result.merchant_name || '');
 
       if (result.type !== type) {
+        setSelectedCategory(null);
+        setSelectedSubcategory(null);
+        setShowCategories(false);
+        setShowSubcategories(false);
         setType(result.type);
         setPendingScanCategory(result.category);
       } else {
@@ -190,7 +277,6 @@ function AddMovement() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al escanear');
     } finally {
-      setScanning(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -201,47 +287,23 @@ function AddMovement() {
     e.preventDefault();
     if (!amount || !selectedCategory) return;
 
-    const accessToken = window.localStorage.getItem('accessToken');
-    if (!accessToken) return;
+    if (!accessToken) {
+      setError('No hay sesión activa');
+      return;
+    }
 
-    setSaving(true);
     setError(null);
 
     try {
-      const dashboardResponse = await fetch(`${API_BASE}/api/dashboard`, {
-        headers: { authorization: `Bearer ${accessToken}` },
-      });
-      if (!dashboardResponse.ok)
-        throw new Error('No se pudo obtener el tablero');
-      const { board } = await dashboardResponse.json();
-
-      const response = await fetch(`${API_BASE}/api/${type}s`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          boardId: board.id,
-          amount,
-          categoryId: selectedSubcategory?.id || selectedCategory.id,
-          note: note || undefined,
-          date: new Date(`${date}T12:00:00`).toISOString(),
-        }),
-      });
-
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || `Error al guardar ${type}`);
-      }
-
-      navigate({
-        to: '/' as never,
+      await createMovementMutation.mutateAsync({
+        movementType: type,
+        amount,
+        categoryId: selectedSubcategory?.id || selectedCategory.id,
+        note: note || undefined,
+        date: new Date(`${date}T12:00:00`).toISOString(),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -277,11 +339,11 @@ function AddMovement() {
 
           <button
             type="button"
-            disabled={scanning}
+            disabled={scanMutation.isPending}
             onClick={() => fileInputRef.current?.click()}
             className="flex w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-violet-300 bg-violet-50 p-5 font-semibold text-violet-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {scanning ? (
+            {scanMutation.isPending ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
                 Analizando recibo...
@@ -445,10 +507,10 @@ function AddMovement() {
               <button
                 type="button"
                 onClick={() => setShowCategories(true)}
-                disabled={loading}
+                disabled={isCategoriesLoading}
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                {loading ? 'Cargando...' : 'Seleccionar categoría'}
+                {isCategoriesLoading ? 'Cargando...' : 'Seleccionar categoría'}
               </button>
             )}
             {!showCategories && selectedCategory && (
@@ -457,7 +519,7 @@ function AddMovement() {
                 onClick={() => {
                   setShowCategories(true);
                 }}
-                disabled={loading}
+                disabled={isCategoriesLoading}
                 className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 <div className="flex items-center gap-3">
@@ -471,8 +533,7 @@ function AddMovement() {
             )}
             {showCategories && (
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {loading ||
-                (categoriesLoadingType && categoriesLoadingType !== type) ? (
+                {isCategoriesLoading ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
                   </div>
@@ -507,8 +568,7 @@ function AddMovement() {
             )}
           </div>
 
-          {selectedCategory &&
-            selectedCategory.subcategories &&
+          {selectedCategory?.subcategories &&
             selectedCategory.subcategories.length > 0 && (
               <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
                 <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
@@ -555,7 +615,7 @@ function AddMovement() {
                         Ninguna (solo {selectedCategory.name})
                       </span>
                     </button>
-                    {selectedCategory.subcategories.map((sub: any) => (
+                    {selectedCategory.subcategories.map((sub) => (
                       <button
                         type="button"
                         key={sub.id}
@@ -606,11 +666,17 @@ function AddMovement() {
           <div className="pt-4 space-y-3">
             <button
               type="submit"
-              disabled={!amount || !selectedCategory || saving}
+              disabled={
+                !amount || !selectedCategory || createMovementMutation.isPending
+              }
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {saving && <Loader2 className="h-5 w-5 animate-spin" />}
-              {saving ? 'Guardando...' : 'Guardar movimiento'}
+              {createMovementMutation.isPending && (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              )}
+              {createMovementMutation.isPending
+                ? 'Guardando...'
+                : 'Guardar movimiento'}
             </button>
             <Link
               to="/"

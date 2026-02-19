@@ -57,6 +57,7 @@ async function run() {
         name text NOT NULL,
         owner_id uuid NOT NULL REFERENCES users(id),
         spending_limit_percentage decimal(5,2),
+        spending_limit_amount decimal(12,2),
         is_active boolean NOT NULL DEFAULT true,
         created_at timestamp NOT NULL DEFAULT now(),
         updated_at timestamp NOT NULL DEFAULT now()

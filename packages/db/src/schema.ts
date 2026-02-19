@@ -29,6 +29,10 @@ export const boards = pgTable('boards', {
     precision: 5,
     scale: 2,
   }),
+  spendingLimitAmount: decimal('spending_limit_amount', {
+    precision: 12,
+    scale: 2,
+  }),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

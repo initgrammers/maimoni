@@ -8,6 +8,7 @@ import {
   normalizeAuthIssuer,
 } from '@maimoni/auth';
 import {
+  boards,
   categories,
   claimAnonymousData,
   createClient as createDbClient,
@@ -172,6 +173,13 @@ const expenseSchema = z.object({
   date: z.string().datetime().optional(),
 });
 
+const boardSettingsSchema = z.object({
+  spendingLimitAmount: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .nullable(),
+});
+
 app.get('/api/incomes', async (c) => {
   const userId = c.get('userId');
   const boardId = c.req.query('boardId');
@@ -184,6 +192,49 @@ app.get('/api/incomes', async (c) => {
 
   return c.json(result);
 });
+
+app.patch(
+  '/api/boards/:boardId/settings',
+  zValidator('json', boardSettingsSchema),
+  async (c) => {
+    const userId = c.get('userId');
+    const boardId = c.req.param('boardId');
+    const boardIdResult = z.string().uuid().safeParse(boardId);
+    if (!boardIdResult.success) {
+      return c.json({ error: 'boardId inválido' }, 400);
+    }
+
+    const [board] = await db
+      .select()
+      .from(boards)
+      .where(eq(boards.id, boardIdResult.data))
+      .limit(1);
+
+    if (!board) {
+      return c.json({ error: 'Tablero no encontrado' }, 404);
+    }
+
+    if (board.ownerId !== userId) {
+      return c.json(
+        { error: 'No tienes permisos para actualizar este tablero' },
+        403,
+      );
+    }
+
+    const body = c.req.valid('json');
+
+    const [updatedBoard] = await db
+      .update(boards)
+      .set({
+        spendingLimitAmount: body.spendingLimitAmount,
+        updatedAt: new Date(),
+      })
+      .where(eq(boards.id, boardIdResult.data))
+      .returning();
+
+    return c.json({ board: updatedBoard });
+  },
+);
 
 app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
   const userId = c.get('userId');

@@ -1,7 +1,8 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { House, Plus, User } from 'lucide-react';
+import { House, Plus, Settings, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { getApiBase, startAuth } from '../lib/openauth';
 
@@ -10,6 +11,7 @@ dayjs.locale('es');
 type Board = {
   id: string;
   name: string;
+  spendingLimitAmount: string | null;
 };
 
 type Income = {
@@ -47,6 +49,8 @@ type DisplayMovement = {
 };
 
 type Period = 'week' | 'month' | 'year';
+type DashboardView = 'dashboard' | 'profile' | 'settings';
+type PigMood = 'sin_datos' | 'zen' | 'fuerte' | 'alerta' | 'urgencia';
 
 function getMovementDateLabel(date: Date) {
   const target = dayjs(date);
@@ -56,6 +60,8 @@ function getMovementDateLabel(date: Date) {
 }
 
 const API_BASE = getApiBase();
+const dashboardQueryKey = (accessToken: string) =>
+  ['dashboard', accessToken] as const;
 
 export const Route = createFileRoute('/' as never)({
   component: Dashboard,
@@ -69,86 +75,299 @@ async function fetchDashboard(accessToken: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to load dashboard');
+    throw new Error('No se pudo cargar el tablero');
   }
 
   return (await response.json()) as DashboardResponse;
 }
 
+async function claimAnonymousBoard(accessToken: string, anonymousId: string) {
+  const response = await fetch(`${API_BASE}/api/auth/claim`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ anonymousId }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(payload?.error ?? 'No se pudo reclamar el tablero');
+  }
+}
+
+async function updateBoardSettings(
+  accessToken: string,
+  boardId: string,
+  spendingLimitAmount: string | null,
+) {
+  const response = await fetch(`${API_BASE}/api/boards/${boardId}/settings`, {
+    method: 'PATCH',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ spendingLimitAmount }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(payload?.error ?? 'No se pudo actualizar la configuración');
+  }
+
+  return (await response.json()) as { board: Board };
+}
+
+type BoardLimitSettingsCardProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onClear: () => void;
+  saving: boolean;
+  successMessage: string | null;
+  errorMessage: string | null;
+};
+
+function BoardLimitSettingsCard({
+  value,
+  onChange,
+  onSave,
+  onClear,
+  saving,
+  successMessage,
+  errorMessage,
+}: BoardLimitSettingsCardProps) {
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <div>
+        <p className="text-base font-semibold text-slate-900">
+          Límite de gasto
+        </p>
+        <p className="text-sm text-slate-500">
+          Define un monto máximo para tu tablero actual.
+        </p>
+      </div>
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-slate-600">
+          Monto (USD)
+        </span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder="Ej: 250.00"
+          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+          disabled={saving}
+        />
+      </label>
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="flex-1 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-60"
+        >
+          {saving ? 'Guardando...' : 'Guardar'}
+        </button>
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={saving}
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all active:scale-95 disabled:opacity-60"
+        >
+          Quitar límite
+        </button>
+      </div>
+
+      {successMessage && (
+        <p className="text-sm text-emerald-700">{successMessage}</p>
+      )}
+      {errorMessage && <p className="text-sm text-rose-600">{errorMessage}</p>}
+    </div>
+  );
+}
+
+function DashboardLoading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
+      <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center">
+        <div className="w-full rounded-[28px] border border-slate-200 bg-white px-6 py-8 text-center shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-slate-200 border-t-slate-900 animate-spin" />
+          <p className="text-lg font-semibold tracking-tight text-slate-900">
+            {title}
+          </p>
+          <p className="mt-2 text-sm text-slate-500">{description}</p>
+          <div className="mt-6 grid grid-cols-3 gap-2">
+            <div className="h-2 rounded-full bg-slate-100" />
+            <div className="h-2 rounded-full bg-slate-200" />
+            <div className="h-2 rounded-full bg-slate-100" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard() {
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [anonymousId, setAnonymousId] = useState<string | null>(null);
-  const [data, setData] = useState<DashboardResponse | null>(null);
+  const queryClient = useQueryClient();
+  const isHydrated = typeof window !== 'undefined';
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return window.localStorage.getItem('accessToken');
+  });
+  const [anonymousId, setAnonymousId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return window.localStorage.getItem('anonymousId');
+  });
+  const [pendingClaimAnonymousId, setPendingClaimAnonymousId] = useState<
+    string | null
+  >(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    return window.localStorage.getItem('pendingClaimAnonymousId');
+  });
+  const [claimRequestKey, setClaimRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('week');
-  const [view, setView] = useState<'dashboard' | 'profile'>('dashboard');
+  const [view, setView] = useState<DashboardView>('dashboard');
+  const [spendingLimitInput, setSpendingLimitInput] = useState('');
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  const claimMutation = useMutation<
+    void,
+    Error,
+    { token: string; anonymous: string }
+  >({
+    mutationFn: ({ token, anonymous }) => claimAnonymousBoard(token, anonymous),
+    onSuccess: async (_data, variables) => {
+      window.localStorage.removeItem('pendingClaimAnonymousId');
+      window.localStorage.removeItem('anonymousId');
+      setAnonymousId(null);
+      setPendingClaimAnonymousId(null);
+      setClaimRequestKey(null);
+      await queryClient.invalidateQueries({
+        queryKey: dashboardQueryKey(variables.token),
+      });
+    },
+    onError: (claimError) => {
+      setError(
+        claimError instanceof Error
+          ? claimError.message
+          : 'No se pudo reclamar el tablero',
+      );
+    },
+  });
 
   useEffect(() => {
-    setAccessToken(window.localStorage.getItem('accessToken'));
-    setAnonymousId(window.localStorage.getItem('anonymousId'));
-    setIsHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (anonymousId) {
-      setView('dashboard');
-    }
-  }, [anonymousId]);
-
-  useEffect(() => {
-    if (!isHydrated || !accessToken || data || loading) {
+    if (!accessToken || !pendingClaimAnonymousId) {
       return;
     }
 
-    const pendingClaimAnonymousId = window.localStorage.getItem(
-      'pendingClaimAnonymousId',
-    );
+    const nextRequestKey = `${accessToken}:${pendingClaimAnonymousId}`;
+    if (claimMutation.isPending || claimRequestKey === nextRequestKey) {
+      return;
+    }
 
-    setLoading(true);
-    setError(null);
+    setClaimRequestKey(nextRequestKey);
+    claimMutation.mutate({
+      token: accessToken,
+      anonymous: pendingClaimAnonymousId,
+    });
+  }, [
+    accessToken,
+    claimMutation,
+    claimMutation.isPending,
+    claimRequestKey,
+    pendingClaimAnonymousId,
+  ]);
 
-    const claimPromise = pendingClaimAnonymousId
-      ? fetch(`${API_BASE}/api/auth/claim`, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ anonymousId: pendingClaimAnonymousId }),
-        }).then(async (response) => {
-          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as {
-              error?: string;
-            } | null;
-            throw new Error(payload?.error ?? 'No se pudo reclamar el tablero');
+  const dashboardQuery = useQuery<DashboardResponse, Error>({
+    queryKey: accessToken
+      ? dashboardQueryKey(accessToken)
+      : (['dashboard', 'guest'] as const),
+    queryFn: () => {
+      if (!accessToken) {
+        throw new Error('Falta el token de acceso');
+      }
+      return fetchDashboard(accessToken);
+    },
+    enabled:
+      isHydrated &&
+      Boolean(accessToken) &&
+      !pendingClaimAnonymousId &&
+      !claimMutation.isPending,
+    refetchOnMount: 'always',
+  });
+
+  const data = dashboardQuery.data ?? null;
+
+  useEffect(() => {
+    setSpendingLimitInput(data?.board.spendingLimitAmount ?? '');
+  }, [data?.board.spendingLimitAmount]);
+
+  const boardSettingsMutation = useMutation<
+    { board: Board },
+    Error,
+    { boardId: string; spendingLimitAmount: string | null }
+  >({
+    mutationFn: ({ boardId, spendingLimitAmount }) => {
+      if (!accessToken) {
+        throw new Error('Sesión no disponible');
+      }
+      return updateBoardSettings(accessToken, boardId, spendingLimitAmount);
+    },
+    onSuccess: ({ board }) => {
+      if (!accessToken) {
+        return;
+      }
+
+      queryClient.setQueryData<DashboardResponse>(
+        dashboardQueryKey(accessToken),
+        (previous) => {
+          if (!previous) {
+            return previous;
           }
-        })
-      : Promise.resolve();
 
-    void claimPromise
-      .then(async () => {
-        if (pendingClaimAnonymousId) {
-          window.localStorage.removeItem('pendingClaimAnonymousId');
-          window.localStorage.removeItem('anonymousId');
-          setAnonymousId(null);
-        }
+          return {
+            ...previous,
+            board,
+          };
+        },
+      );
+    },
+  });
 
-        const dashboard = await fetchDashboard(accessToken);
-        setData(dashboard);
-      })
-      .catch((error) => {
-        setError(
-          error instanceof Error
-            ? error.message
-            : 'No se pudo cargar el dashboard',
-        );
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [accessToken, data, isHydrated, loading]);
+  const isRefreshingDashboard =
+    dashboardQuery.isFetching && !!dashboardQuery.data;
+  const showInitialDashboardLoading =
+    claimMutation.isPending ||
+    (dashboardQuery.isPending && !dashboardQuery.data);
 
   const movements = useMemo<DisplayMovement[]>(() => {
     if (!data) return [];
@@ -261,7 +480,7 @@ function Dashboard() {
     const endOfCurrentWeek = new Date(startOfCurrentWeek);
     endOfCurrentWeek.setDate(startOfCurrentWeek.getDate() + 7);
 
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const dayTotals = new Array(7).fill(0) as number[];
     let currentTotal = 0;
     let previousTotal = 0;
@@ -306,14 +525,60 @@ function Dashboard() {
     return ((currentTotal - previousTotal) / previousTotal) * 100;
   }, [weeklyExpenses]);
 
+  const monthlyExpenseTotal = useMemo(() => {
+    const now = new Date();
+    return movements
+      .filter(
+        (movement) =>
+          movement.type === 'expense' &&
+          movement.date.getFullYear() === now.getFullYear() &&
+          movement.date.getMonth() === now.getMonth(),
+      )
+      .reduce((sum, movement) => sum + movement.amount, 0);
+  }, [movements]);
+
+  const monthlyLimit = useMemo(() => {
+    const raw = data?.board.spendingLimitAmount;
+    if (!raw) return null;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+  }, [data?.board.spendingLimitAmount]);
+
+  const monthlyProgress = useMemo(() => {
+    if (!monthlyLimit) {
+      return {
+        ratio: 0,
+        percent: 0,
+        remaining: null,
+        mood: 'sin_datos' as PigMood,
+      };
+    }
+
+    const ratio = monthlyExpenseTotal / monthlyLimit;
+    const remaining = Math.max(monthlyLimit - monthlyExpenseTotal, 0);
+
+    let mood: PigMood = 'urgencia';
+    if (ratio <= 0.5) mood = 'zen';
+    else if (ratio <= 0.8) mood = 'fuerte';
+    else if (ratio <= 1) mood = 'alerta';
+
+    return {
+      ratio,
+      percent: Math.min(ratio * 100, 100),
+      remaining,
+      mood,
+    };
+  }, [monthlyExpenseTotal, monthlyLimit]);
+
   async function continueAsAnonymous() {
     setError(null);
     setLoading(true);
     try {
       await startAuth('anonymous');
     } catch (e) {
-      console.error('Error al iniciar sesion anonima:', e);
-      setError('No se pudo iniciar sesion anonima');
+      console.error('Error al iniciar sesión anónima:', e);
+      setError('No se pudo iniciar sesión anónima');
     } finally {
       setLoading(false);
     }
@@ -328,14 +593,19 @@ function Dashboard() {
       }
       await startAuth('whatsapp');
     } catch (e) {
-      console.error('Error al iniciar sesion con WhatsApp:', e);
-      setError('No se pudo iniciar sesion');
+      console.error('Error al iniciar sesión con WhatsApp:', e);
+      setError('No se pudo iniciar sesión');
     } finally {
       setLoading(false);
     }
   }
 
   function logout() {
+    if (accessToken) {
+      queryClient.removeQueries({
+        queryKey: dashboardQueryKey(accessToken),
+      });
+    }
     window.localStorage.removeItem('accessToken');
     window.localStorage.removeItem('refreshToken');
     window.localStorage.removeItem('anonymousId');
@@ -343,60 +613,143 @@ function Dashboard() {
     window.sessionStorage.removeItem('auth_challenge');
     setAccessToken(null);
     setAnonymousId(null);
-    setData(null);
+    setPendingClaimAnonymousId(null);
+    setClaimRequestKey(null);
     setError(null);
+    setSettingsError(null);
+    setSettingsSuccess(null);
     setView('dashboard');
   }
 
-  if (!isHydrated) {
-    return <div className="min-h-screen bg-[#f7f7f5]" />;
+  function normalizeAmount(value: string) {
+    return value.trim().replace(',', '.');
+  }
+
+  async function saveSpendingLimit() {
+    if (!data) return;
+
+    const parsed = normalizeAmount(spendingLimitInput);
+    if (!/^\d+(\.\d{1,2})?$/.test(parsed)) {
+      setSettingsSuccess(null);
+      setSettingsError('Ingresa un monto válido con hasta 2 decimales');
+      return;
+    }
+
+    setSettingsSuccess(null);
+    setSettingsError(null);
+
+    try {
+      const response = await boardSettingsMutation.mutateAsync({
+        boardId: data.board.id,
+        spendingLimitAmount: parsed,
+      });
+      setSpendingLimitInput(response.board.spendingLimitAmount ?? '');
+      setSettingsSuccess('Límite actualizado correctamente');
+    } catch (updateError) {
+      setSettingsError(
+        updateError instanceof Error
+          ? updateError.message
+          : 'No se pudo guardar el límite',
+      );
+    }
+  }
+
+  async function clearSpendingLimit() {
+    if (!data) return;
+
+    setSettingsSuccess(null);
+    setSettingsError(null);
+
+    try {
+      await boardSettingsMutation.mutateAsync({
+        boardId: data.board.id,
+        spendingLimitAmount: null,
+      });
+      setSpendingLimitInput('');
+      setSettingsSuccess('Límite eliminado correctamente');
+    } catch (updateError) {
+      setSettingsError(
+        updateError instanceof Error
+          ? updateError.message
+          : 'No se pudo eliminar el límite',
+      );
+    }
   }
 
   if (!accessToken) {
     return (
       <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
-        <div className="mx-auto max-w-md rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-          <h1 className="mb-2 text-3xl font-semibold tracking-tight">
-            maimonei
-          </h1>
-          <p className="mb-6 text-base text-slate-500">
-            Comienza ahora sin cuenta o inicia sesion para sincronizar tus
-            tableros.
-          </p>
-          <div className="space-y-3">
-            <button
-              className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
-              onClick={continueAsAnonymous}
-              type="button"
-              disabled={loading}
-            >
-              Continuar como anonimo
-            </button>
-            <button
-              className="w-full rounded-2xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-900"
-              onClick={loginAndClaim}
-              type="button"
-              disabled={loading}
-            >
-              Iniciar sesion con WhatsApp
-            </button>
+        <div className="mx-auto flex min-h-[78vh] w-full max-w-md items-center">
+          <div className="w-full rounded-[28px] border border-slate-200 bg-white px-6 py-7 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <div className="mb-6 text-center">
+              <h1 className="mb-2 text-lg font-semibold uppercase tracking-wide text-emerald-700">
+                Bienvenido a
+              </h1>
+              <img
+                src="/img/maimoni.png"
+                alt="Maimoni"
+                className="mx-auto mb-3 h-28 w-auto object-contain"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <button
+                className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-60"
+                onClick={continueAsAnonymous}
+                type="button"
+                disabled={loading}
+              >
+                {loading ? 'Cargando...' : 'Continuar sin cuenta'}
+              </button>
+              <button
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition-all active:scale-95 disabled:opacity-60"
+                onClick={loginAndClaim}
+                type="button"
+                disabled={loading}
+              >
+                Iniciar sesión con WhatsApp
+              </button>
+            </div>
+
+            <p className="mt-4 text-center text-xs text-slate-500">
+              Puedes usar la app sin cuenta. Si inicias sesión, tus datos se
+              guardan y sincronizan entre dispositivos.
+            </p>
+            {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
           </div>
-          {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
         </div>
       </div>
     );
   }
 
   if (!data) {
+    if (showInitialDashboardLoading) {
+      return (
+        <DashboardLoading
+          title="Cargando tu tablero"
+          description="Sincronizando ingresos, gastos y configuración..."
+        />
+      );
+    }
+
+    if (dashboardQuery.error || error) {
+      return (
+        <DashboardLoading
+          title="No pudimos cargar tu tablero"
+          description={
+            error ??
+            dashboardQuery.error?.message ??
+            'Intenta nuevamente en unos segundos.'
+          }
+        />
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
-        <div className="mx-auto max-w-md rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-          <p className="text-sm text-slate-500">
-            {loading ? 'Cargando dashboard...' : 'Preparando dashboard...'}
-          </p>
-          {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-        </div>
-      </div>
+      <DashboardLoading
+        title="Preparando tablero"
+        description="Esto tomará solo un momento."
+      />
     );
   }
 
@@ -408,7 +761,8 @@ function Dashboard() {
             {anonymousId && (
               <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900 shadow-sm border border-indigo-100">
                 <p className="font-medium">
-                  Sincroniza tus datos iniciando sesión
+                  Puedes usar la app sin iniciar sesión, pero al hacerlo evitas
+                  perder datos y los sincronizas entre dispositivos.
                 </p>
                 <button
                   type="button"
@@ -422,12 +776,15 @@ function Dashboard() {
             )}
 
             <section className="mb-6">
-              <div className="rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+              <div className="relative rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+                {isRefreshingDashboard && (
+                  <div className="absolute right-4 top-4 h-5 w-5 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
+                )}
                 <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
                   {currencyFormatter.format(weeklyExpenses.currentTotal)}
                 </p>
                 <p className="flex items-center gap-2 text-base text-slate-400">
-                  Total spent this week
+                  Total gastado esta semana
                   <span
                     className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
                       weekChange >= 0
@@ -478,14 +835,79 @@ function Dashboard() {
                           : 'text-slate-400'
                       }`}
                     >
-                      {option}
+                      {option === 'week'
+                        ? 'Semana'
+                        : option === 'month'
+                          ? 'Mes'
+                          : 'Año'}
                     </button>
                   ))}
                 </div>
               </div>
             </section>
 
-            <main className="pb-3">
+            <section className="mb-6">
+              <div className="relative rounded-[28px] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 px-5 py-5 shadow-[0_12px_30px_rgba(16,185,129,0.12)]">
+                {isRefreshingDashboard && (
+                  <div className="absolute right-4 top-4 h-5 w-5 rounded-full border-2 border-emerald-200 border-t-emerald-700 animate-spin" />
+                )}
+                <div className="flex min-h-[150px] items-stretch gap-4">
+                  <div className="w-28 shrink-0 self-stretch">
+                    <img
+                      src={`/img/piggi/${monthlyProgress.mood}.png`}
+                      alt="Estado del ahorro mensual"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+
+                  <div className="flex min-w-0 flex-1 flex-col justify-between py-1">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+                        Límite mensual de gastos
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        {monthlyLimit
+                          ? `${currencyFormatter.format(monthlyExpenseTotal)} de ${currencyFormatter.format(monthlyLimit)}`
+                          : 'Configura un límite para ver tu progreso del mes'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-2xl font-semibold tracking-tight text-slate-900">
+                        {monthlyLimit
+                          ? `${Math.min(monthlyProgress.ratio * 100, 999).toFixed(0)}% usado`
+                          : 'Sin datos'}
+                      </p>
+
+                      <div className="h-3 w-full overflow-hidden rounded-full bg-emerald-100">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            monthlyProgress.ratio <= 0.8
+                              ? 'bg-emerald-500'
+                              : monthlyProgress.ratio <= 1
+                                ? 'bg-amber-500'
+                                : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${monthlyProgress.percent}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-2 text-xs font-medium text-slate-600">
+                        {monthlyLimit && monthlyProgress.remaining !== null
+                          ? `Restante: ${currencyFormatter.format(monthlyProgress.remaining)}`
+                          : 'Sin límite configurado'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <main className="relative pb-3">
+              {isRefreshingDashboard && (
+                <div className="absolute right-0 top-0 h-5 w-5 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
+              )}
+
               {groupedMovements.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
                   No hay movimientos en este periodo.
@@ -549,6 +971,19 @@ function Dashboard() {
                   Administra tu cuenta y cierra sesión cuando lo necesites.
                 </p>
               </div>
+              <BoardLimitSettingsCard
+                value={spendingLimitInput}
+                onChange={setSpendingLimitInput}
+                onSave={() => {
+                  void saveSpendingLimit();
+                }}
+                onClear={() => {
+                  void clearSpendingLimit();
+                }}
+                saving={boardSettingsMutation.isPending}
+                successMessage={settingsSuccess}
+                errorMessage={settingsError}
+              />
               <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <p className="text-sm text-slate-500">
                   Si necesitas proteger tu dispositivo o cerrar sesión remota,
@@ -566,6 +1001,35 @@ function Dashboard() {
             {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
           </section>
         )}
+
+        {view === 'settings' && anonymousId && (
+          <section className="rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <div className="space-y-6">
+              <div>
+                <p className="text-3xl font-semibold tracking-tight text-slate-950">
+                  Configuración
+                </p>
+                <p className="text-sm text-slate-500">
+                  Ajusta el límite de gasto para este tablero.
+                </p>
+              </div>
+              <BoardLimitSettingsCard
+                value={spendingLimitInput}
+                onChange={setSpendingLimitInput}
+                onSave={() => {
+                  void saveSpendingLimit();
+                }}
+                onClear={() => {
+                  void clearSpendingLimit();
+                }}
+                saving={boardSettingsMutation.isPending}
+                successMessage={settingsSuccess}
+                errorMessage={settingsError}
+              />
+            </div>
+            {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
+          </section>
+        )}
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-6 backdrop-blur">
@@ -578,7 +1042,7 @@ function Dashboard() {
                 ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
                 : 'border-transparent text-slate-400 hover:bg-slate-50'
             }`}
-            aria-label="Ir al dashboard"
+            aria-label="Ir al tablero"
           >
             <House className="h-6 w-6" />
           </button>
@@ -588,29 +1052,32 @@ function Dashboard() {
               to="/add"
               search={(current) => current}
               params={(current) => current}
-              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg transition-all active:scale-95"
+              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-200/80 transition-all hover:bg-emerald-600 active:scale-95"
               aria-label="Agregar movimiento"
             >
               <Plus className="h-7 w-7" strokeWidth={3} />
             </Link>
           </div>
 
-          {anonymousId ? (
-            <div className="h-12 w-12" />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setView('profile')}
-              className={`justify-self-end flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
-                view === 'profile'
-                  ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
-                  : 'border-transparent text-slate-400 hover:bg-slate-50'
-              }`}
-              aria-label="Ver perfil"
-            >
+          <button
+            type="button"
+            onClick={() => {
+              setView(anonymousId ? 'settings' : 'profile');
+            }}
+            className={`justify-self-end flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
+              (anonymousId && view === 'settings') ||
+              (!anonymousId && view === 'profile')
+                ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                : 'border-transparent text-slate-400 hover:bg-slate-50'
+            }`}
+            aria-label={anonymousId ? 'Ver configuración' : 'Ver perfil'}
+          >
+            {anonymousId ? (
+              <Settings className="h-6 w-6" />
+            ) : (
               <User className="h-6 w-6" />
-            </button>
-          )}
+            )}
+          </button>
         </div>
       </nav>
     </div>

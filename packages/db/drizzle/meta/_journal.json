@@ -22,6 +22,13 @@
       "when": 1771387769103,
       "tag": "0002_fix_hierarchical_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771473392464,
+      "tag": "0003_add_spending_limit_amount",
+      "breakpoints": true
     }
   ]
 }
