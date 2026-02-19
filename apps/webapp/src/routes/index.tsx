@@ -1,9 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { House, Plus, Settings, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '../components/ui/drawer';
 import { getApiBase, startAuth } from '../lib/openauth';
 
 dayjs.locale('es');
@@ -123,6 +132,22 @@ async function updateBoardSettings(
   return (await response.json()) as { board: Board };
 }
 
+async function removeExpense(accessToken: string, expenseId: string) {
+  const response = await fetch(`${API_BASE}/api/expenses/${expenseId}`, {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'No se pudo eliminar el gasto');
+  }
+}
+
 type BoardLimitSettingsCardProps = {
   value: string;
   onChange: (value: string) => void;
@@ -225,6 +250,7 @@ function DashboardLoading({
 }
 
 function Dashboard() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isHydrated, setIsHydrated] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -240,6 +266,15 @@ function Dashboard() {
   const [spendingLimitInput, setSpendingLimitInput] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [isExpenseDrawerOpen, setIsExpenseDrawerOpen] = useState(false);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(
+    null,
+  );
+  const [expenseActionError, setExpenseActionError] = useState<string | null>(
+    null,
+  );
+  const [showDeleteExpenseConfirm, setShowDeleteExpenseConfirm] =
+    useState(false);
 
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
@@ -354,6 +389,27 @@ function Dashboard() {
     },
   });
 
+  const deleteExpenseMutation = useMutation<void, Error, { expenseId: string }>(
+    {
+      mutationFn: ({ expenseId }) => {
+        if (!accessToken) {
+          throw new Error('Sesión no disponible');
+        }
+
+        return removeExpense(accessToken, expenseId);
+      },
+      onSuccess: async () => {
+        if (!accessToken) {
+          return;
+        }
+
+        await queryClient.invalidateQueries({
+          queryKey: dashboardQueryKey(accessToken),
+        });
+      },
+    },
+  );
+
   const isRefreshingDashboard =
     dashboardQuery.isFetching && !!dashboardQuery.data;
   const showInitialDashboardLoading =
@@ -387,6 +443,17 @@ function Dashboard() {
       (a, b) => b.date.getTime() - a.date.getTime(),
     );
   }, [data]);
+
+  const selectedExpense = useMemo(() => {
+    if (!selectedExpenseId) {
+      return null;
+    }
+
+    return movements.find(
+      (movement) =>
+        movement.id === selectedExpenseId && movement.type === 'expense',
+    );
+  }, [movements, selectedExpenseId]);
 
   const currencyFormatter = useMemo(
     () =>
@@ -667,6 +734,60 @@ function Dashboard() {
     }
   }
 
+  function handleExpenseDrawerOpenChange(open: boolean) {
+    setIsExpenseDrawerOpen(open);
+
+    if (!open) {
+      setSelectedExpenseId(null);
+      setExpenseActionError(null);
+      setShowDeleteExpenseConfirm(false);
+    }
+  }
+
+  function openExpenseDetails(expense: DisplayMovement) {
+    if (expense.type !== 'expense') {
+      return;
+    }
+
+    setSelectedExpenseId(expense.id);
+    setExpenseActionError(null);
+    setShowDeleteExpenseConfirm(false);
+    setIsExpenseDrawerOpen(true);
+  }
+
+  async function deleteSelectedExpense() {
+    if (!selectedExpenseId) {
+      return;
+    }
+
+    setExpenseActionError(null);
+    try {
+      await deleteExpenseMutation.mutateAsync({
+        expenseId: selectedExpenseId,
+      });
+      handleExpenseDrawerOpenChange(false);
+    } catch (deleteError) {
+      setExpenseActionError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : 'No se pudo eliminar el gasto',
+      );
+    }
+  }
+
+  useEffect(() => {
+    if (!isExpenseDrawerOpen) {
+      return;
+    }
+
+    if (!selectedExpense) {
+      setIsExpenseDrawerOpen(false);
+      setSelectedExpenseId(null);
+      setExpenseActionError(null);
+      setShowDeleteExpenseConfirm(false);
+    }
+  }, [isExpenseDrawerOpen, selectedExpense]);
+
   if (!accessToken) {
     return (
       <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
@@ -910,37 +1031,63 @@ function Dashboard() {
                       {label}
                     </p>
                     <div className="space-y-3 rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                      {groupMovements.map((movement) => (
-                        <div
-                          key={movement.id}
-                          className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3"
-                        >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
-                              {movement.categoryEmoji}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-slate-900">
-                                {movement.categoryName}
-                              </p>
-                              {movement.note && (
-                                <p className="truncate text-xs text-slate-500">
-                                  {movement.note}
+                      {groupMovements.map((movement) => {
+                        const content = (
+                          <>
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+                                {movement.categoryEmoji}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-slate-900">
+                                  {movement.categoryName}
                                 </p>
-                              )}
+                                {movement.note && (
+                                  <p className="truncate text-xs text-slate-500">
+                                    {movement.note}
+                                  </p>
+                                )}
+                                {movement.type === 'expense' && (
+                                  <p className="mt-0.5 text-xs text-slate-400">
+                                    Toca para ver o editar
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <p
-                            className={`text-sm font-semibold whitespace-nowrap ${
-                              movement.type === 'income'
-                                ? 'text-emerald-600'
-                                : 'text-slate-900'
-                            }`}
+                            <p
+                              className={`whitespace-nowrap text-sm font-semibold ${
+                                movement.type === 'income'
+                                  ? 'text-emerald-600'
+                                  : 'text-slate-900'
+                              }`}
+                            >
+                              {currencyFormatter.format(movement.amount)}
+                            </p>
+                          </>
+                        );
+
+                        if (movement.type === 'expense') {
+                          return (
+                            <button
+                              key={movement.id}
+                              type="button"
+                              onClick={() => openExpenseDetails(movement)}
+                              className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3 text-left transition-all active:scale-[0.99]"
+                            >
+                              {content}
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={movement.id}
+                            className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3"
                           >
-                            {currencyFormatter.format(movement.amount)}
-                          </p>
-                        </div>
-                      ))}
+                            {content}
+                          </div>
+                        );
+                      })}
                     </div>
                   </section>
                 ))
@@ -1022,6 +1169,133 @@ function Dashboard() {
           </section>
         )}
       </div>
+
+      <Drawer
+        open={isExpenseDrawerOpen}
+        onOpenChange={handleExpenseDrawerOpenChange}
+      >
+        <DrawerContent>
+          <DrawerHeader className="pb-2">
+            <DrawerTitle>Detalle del gasto</DrawerTitle>
+            <DrawerDescription>
+              Puedes revisar, editar o eliminar este gasto.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="space-y-4 px-4 pb-2">
+            {!selectedExpense ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No encontramos ese gasto. Cierra e intenta nuevamente.
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-2xl font-semibold tracking-tight text-slate-950">
+                  {currencyFormatter.format(selectedExpense.amount)}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Categoría:</span>{' '}
+                  {selectedExpense.categoryEmoji} {selectedExpense.categoryName}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Fecha:</span>{' '}
+                  {dayjs(selectedExpense.date).format('D MMM YYYY')}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Nota:</span>{' '}
+                  {selectedExpense.note ?? 'Sin nota'}
+                </p>
+              </div>
+            )}
+
+            {showDeleteExpenseConfirm && selectedExpense && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                Esta acción eliminará el gasto del tablero. Puedes continuar
+                solo si estás seguro.
+              </div>
+            )}
+
+            {expenseActionError && (
+              <p className="rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">
+                {expenseActionError}
+              </p>
+            )}
+          </div>
+
+          <DrawerFooter className="pb-8">
+            {!selectedExpense ? (
+              <DrawerClose asChild>
+                <button
+                  type="button"
+                  className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white transition-all active:scale-[0.98]"
+                >
+                  Cerrar
+                </button>
+              </DrawerClose>
+            ) : showDeleteExpenseConfirm ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void deleteSelectedExpense();
+                  }}
+                  disabled={deleteExpenseMutation.isPending}
+                  className="w-full rounded-[20px] bg-rose-600 py-4 text-base font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  {deleteExpenseMutation.isPending
+                    ? 'Eliminando...'
+                    : 'Si, eliminar gasto'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteExpenseConfirm(false);
+                    setExpenseActionError(null);
+                  }}
+                  disabled={deleteExpenseMutation.isPending}
+                  className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate({
+                      to: `/expenses/${selectedExpense.id}/edit` as never,
+                    });
+                    handleExpenseDrawerOpenChange(false);
+                    setExpenseActionError(null);
+                    setShowDeleteExpenseConfirm(false);
+                  }}
+                  className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white transition-all active:scale-[0.98]"
+                >
+                  Editar gasto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteExpenseConfirm(true);
+                    setExpenseActionError(null);
+                  }}
+                  className="w-full rounded-[20px] border border-rose-300 bg-rose-50 py-4 text-base font-semibold text-rose-700 transition-all active:scale-[0.98]"
+                >
+                  Eliminar gasto
+                </button>
+                <DrawerClose asChild>
+                  <button
+                    type="button"
+                    className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98]"
+                  >
+                    Cerrar
+                  </button>
+                </DrawerClose>
+              </>
+            )}
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-6 backdrop-blur">
         <div className="mx-auto grid w-full max-w-md grid-cols-3 items-center">

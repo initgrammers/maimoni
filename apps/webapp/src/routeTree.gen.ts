@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as ExpensesExpenseIdEditRouteImport } from './routes/expenses.$expenseId.edit'
 
 const AddRoute = AddRouteImport.update({
   id: '/add',
@@ -28,35 +29,44 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExpensesExpenseIdEditRoute = ExpensesExpenseIdEditRouteImport.update({
+  id: '/expenses/$expenseId/edit',
+  path: '/expenses/$expenseId/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/auth/callback'
+  fullPaths: '/' | '/add' | '/auth/callback' | '/expenses/$expenseId/edit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/auth/callback'
-  id: '__root__' | '/' | '/add' | '/auth/callback'
+  to: '/' | '/add' | '/auth/callback' | '/expenses/$expenseId/edit'
+  id: '__root__' | '/' | '/add' | '/auth/callback' | '/expenses/$expenseId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  ExpensesExpenseIdEditRoute: typeof ExpensesExpenseIdEditRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/expenses/$expenseId/edit': {
+      id: '/expenses/$expenseId/edit'
+      path: '/expenses/$expenseId/edit'
+      fullPath: '/expenses/$expenseId/edit'
+      preLoaderRoute: typeof ExpensesExpenseIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  ExpensesExpenseIdEditRoute: ExpensesExpenseIdEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

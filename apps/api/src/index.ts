@@ -104,7 +104,13 @@ app.get('/api/dashboard', async (c) => {
       })
       .from(expenses)
       .innerJoin(categories, eq(expenses.categoryId, categories.id))
-      .where(and(eq(expenses.userId, userId), eq(expenses.boardId, board.id))),
+      .where(
+        and(
+          eq(expenses.userId, userId),
+          eq(expenses.boardId, board.id),
+          eq(expenses.isActive, true),
+        ),
+      ),
   ]);
 
   const incomesWithCategory = incomeRows.map(
@@ -172,6 +178,20 @@ const expenseSchema = z.object({
   receiptUrl: z.string().url().optional(),
   date: z.string().datetime().optional(),
 });
+
+const expenseUpdateSchema = z
+  .object({
+    amount: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
+    categoryId: z.string().uuid().optional(),
+    note: z.string().nullable().optional(),
+    date: z.string().datetime().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Debes enviar al menos un campo para actualizar',
+  });
 
 const boardSettingsSchema = z.object({
   spendingLimitAmount: z
@@ -296,6 +316,122 @@ app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
   return c.json(result[0]);
 });
 
+app.get('/api/expenses/:expenseId', async (c) => {
+  const userId = c.get('userId');
+  const expenseId = c.req.param('expenseId');
+  const expenseIdResult = z.string().uuid().safeParse(expenseId);
+  if (!expenseIdResult.success) {
+    return c.json({ error: 'expenseId inválido' }, 400);
+  }
+
+  const [expense] = await db
+    .select()
+    .from(expenses)
+    .where(
+      and(
+        eq(expenses.id, expenseIdResult.data),
+        eq(expenses.userId, userId),
+        eq(expenses.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!expense) {
+    return c.json({ error: 'Gasto no encontrado' }, 404);
+  }
+
+  return c.json(expense);
+});
+
+app.patch(
+  '/api/expenses/:expenseId',
+  zValidator('json', expenseUpdateSchema),
+  async (c) => {
+    const userId = c.get('userId');
+    const expenseId = c.req.param('expenseId');
+    const expenseIdResult = z.string().uuid().safeParse(expenseId);
+    if (!expenseIdResult.success) {
+      return c.json({ error: 'expenseId inválido' }, 400);
+    }
+
+    const body = c.req.valid('json');
+
+    const [existingExpense] = await db
+      .select()
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.id, expenseIdResult.data),
+          eq(expenses.userId, userId),
+          eq(expenses.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (!existingExpense) {
+      return c.json({ error: 'Gasto no encontrado' }, 404);
+    }
+
+    if (body.categoryId) {
+      const [category] = await db
+        .select()
+        .from(categories)
+        .where(eq(categories.id, body.categoryId))
+        .limit(1);
+
+      if (!category || category.type !== 'expense') {
+        return c.json({ error: 'Categoría de gasto inválida' }, 400);
+      }
+    }
+
+    const [updatedExpense] = await db
+      .update(expenses)
+      .set({
+        amount: body.amount,
+        categoryId: body.categoryId,
+        note: body.note,
+        date: body.date ? new Date(body.date) : undefined,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(expenses.id, expenseIdResult.data), eq(expenses.userId, userId)),
+      )
+      .returning();
+
+    return c.json(updatedExpense);
+  },
+);
+
+app.delete('/api/expenses/:expenseId', async (c) => {
+  const userId = c.get('userId');
+  const expenseId = c.req.param('expenseId');
+  const expenseIdResult = z.string().uuid().safeParse(expenseId);
+  if (!expenseIdResult.success) {
+    return c.json({ error: 'expenseId inválido' }, 400);
+  }
+
+  const result = await db
+    .update(expenses)
+    .set({
+      isActive: false,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(expenses.id, expenseIdResult.data),
+        eq(expenses.userId, userId),
+        eq(expenses.isActive, true),
+      ),
+    )
+    .returning({ id: expenses.id });
+
+  if (result.length === 0) {
+    return c.json({ error: 'Gasto no encontrado' }, 404);
+  }
+
+  return c.json({ success: true, id: result[0].id });
+});
+
 app.get('/api/expenses', async (c) => {
   const userId = c.get('userId');
   const boardId = c.req.query('boardId');
@@ -304,7 +440,13 @@ app.get('/api/expenses', async (c) => {
   const result = await db
     .select()
     .from(expenses)
-    .where(and(eq(expenses.userId, userId), eq(expenses.boardId, boardId)));
+    .where(
+      and(
+        eq(expenses.userId, userId),
+        eq(expenses.boardId, boardId),
+        eq(expenses.isActive, true),
+      ),
+    );
 
   return c.json(result);
 });
