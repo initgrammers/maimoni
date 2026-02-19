@@ -1,6 +1,24 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Camera, Check, Loader2, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import {
+  Calendar as CalendarIcon,
+  Camera,
+  Check,
+  Loader2,
+  X,
+} from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
+import { Calendar } from '../components/ui/calendar';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '../components/ui/drawer';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, MovementType } from '../types';
@@ -45,7 +63,18 @@ function AddMovement() {
   const noteInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [month, setMonth] = useState<Date>(() => new Date(`${date}T12:00:00`));
+
+  useEffect(() => {
+    setMonth(new Date(`${date}T12:00:00`));
+  }, [date]);
   const [type, setType] = useState<MovementType>('expense');
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoadingType, setCategoriesLoadingType] =
@@ -308,14 +337,81 @@ function AddMovement() {
             >
               Fecha
             </label>
-            <input
-              id={dateInputId}
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
+            <Drawer>
+              <DrawerTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-left text-slate-900 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <span className="font-medium">
+                    {date
+                      ? format(new Date(`${date}T12:00:00`), 'PPP', {
+                          locale: es,
+                        })
+                      : 'Seleccionar fecha'}
+                  </span>
+                  <CalendarIcon className="h-5 w-5 text-slate-400" />
+                </button>
+              </DrawerTrigger>
+              <DrawerContent>
+                <DrawerHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <DrawerTitle className="text-xl font-bold">
+                      Seleccionar fecha
+                    </DrawerTitle>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(
+                          2,
+                          '0',
+                        );
+                        const day = String(now.getDate()).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        setDate(dateStr);
+                        setMonth(new Date(`${dateStr}T12:00:00`));
+                      }}
+                      className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600 transition-all active:scale-95 hover:bg-slate-200"
+                    >
+                      Hoy
+                    </button>
+                  </div>
+                </DrawerHeader>
+                <div className="flex justify-center p-4">
+                  <Calendar
+                    mode="single"
+                    selected={date ? new Date(`${date}T00:00:00`) : undefined}
+                    onSelect={(newDate) => {
+                      if (newDate) {
+                        const year = newDate.getFullYear();
+                        const month = String(newDate.getMonth() + 1).padStart(
+                          2,
+                          '0',
+                        );
+                        const day = String(newDate.getDate()).padStart(2, '0');
+                        setDate(`${year}-${month}-${day}`);
+                      }
+                    }}
+                    month={month}
+                    onMonthChange={setMonth}
+                    locale={es}
+                    className="w-full max-w-[350px]"
+                  />
+                </div>
+                <DrawerFooter className="pb-8">
+                  <DrawerClose asChild>
+                    <button
+                      type="button"
+                      className="w-full rounded-[20px] bg-slate-900 py-5 text-lg font-bold text-white shadow-lg transition-all active:scale-[0.98]"
+                    >
+                      Confirmar
+                    </button>
+                  </DrawerClose>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
           </div>
 
           <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
