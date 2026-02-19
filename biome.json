@@ -1,5 +1,9 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.1/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": ["**", "!!**/sst-env.d.ts"]
+  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -19,7 +23,8 @@
   },
   "css": {
     "parser": {
-      "cssModules": true
+      "cssModules": true,
+      "tailwindDirectives": true
     },
     "formatter": {
       "enabled": false

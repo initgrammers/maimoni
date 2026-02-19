@@ -284,7 +284,8 @@ function Dashboard() {
     setLoading(true);
     try {
       await startAuth('anonymous');
-    } catch {
+    } catch (e) {
+      console.error('Error al iniciar sesion anonima:', e);
       setError('No se pudo iniciar sesion anonima');
     } finally {
       setLoading(false);
@@ -299,7 +300,8 @@ function Dashboard() {
         localStorage.setItem('pendingClaimAnonymousId', anonymousId);
       }
       await startAuth('whatsapp');
-    } catch {
+    } catch (e) {
+      console.error('Error al iniciar sesion con WhatsApp:', e);
       setError('No se pudo iniciar sesion');
     } finally {
       setLoading(false);

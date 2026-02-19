@@ -41,9 +41,11 @@ interface ScanResponse {
 function AddMovement() {
   const navigate = useNavigate();
   const amountInputId = useId();
+  const dateInputId = useId();
   const noteInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [type, setType] = useState<MovementType>('expense');
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoadingType, setCategoriesLoadingType] =
@@ -130,6 +132,16 @@ function AddMovement() {
       const result = (await response.json()) as ScanResponse;
 
       setAmount(result.total_amount.toString());
+      if (result.date) {
+        try {
+          const parsedDate = new Date(result.date);
+          if (!Number.isNaN(parsedDate.getTime())) {
+            setDate(parsedDate.toISOString().split('T')[0]);
+          }
+        } catch (e) {
+          console.error('Error parsing scanned date:', e);
+        }
+      }
       setNote(result.note || result.merchant_name || '');
 
       if (result.type !== type) {
@@ -183,6 +195,7 @@ function AddMovement() {
           amount,
           categoryId: selectedSubcategory?.id || selectedCategory.id,
           note: note || undefined,
+          date: new Date(date).toISOString(),
         }),
       });
 
@@ -286,6 +299,23 @@ function AddMovement() {
                 Ingreso
               </button>
             </div>
+          </div>
+
+          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <label
+              htmlFor={dateInputId}
+              className="block text-sm font-semibold uppercase tracking-wider text-slate-500"
+            >
+              Fecha
+            </label>
+            <input
+              id={dateInputId}
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            />
           </div>
 
           <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
