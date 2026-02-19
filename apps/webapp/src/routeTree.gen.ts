@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AddIncomeRouteImport } from './routes/add.income'
+import { Route as IncomesIncomeIdEditRouteImport } from './routes/incomes.$incomeId.edit'
 import { Route as ExpensesExpenseIdEditRouteImport } from './routes/expenses.$expenseId.edit'
 
 const AddRoute = AddRouteImport.update({
@@ -29,6 +31,16 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AddIncomeRoute = AddIncomeRouteImport.update({
+  id: '/income',
+  path: '/income',
+  getParentRoute: () => AddRoute,
+} as any)
+const IncomesIncomeIdEditRoute = IncomesIncomeIdEditRouteImport.update({
+  id: '/incomes/$incomeId/edit',
+  path: '/incomes/$incomeId/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExpensesExpenseIdEditRoute = ExpensesExpenseIdEditRouteImport.update({
   id: '/expenses/$expenseId/edit',
   path: '/expenses/$expenseId/edit',
@@ -37,36 +49,62 @@ const ExpensesExpenseIdEditRoute = ExpensesExpenseIdEditRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/add': typeof AddRoute
+  '/add': typeof AddRouteWithChildren
+  '/add/income': typeof AddIncomeRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
+  '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/add': typeof AddRoute
+  '/add': typeof AddRouteWithChildren
+  '/add/income': typeof AddIncomeRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
+  '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/add': typeof AddRoute
+  '/add': typeof AddRouteWithChildren
+  '/add/income': typeof AddIncomeRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
+  '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/auth/callback' | '/expenses/$expenseId/edit'
+  fullPaths:
+    | '/'
+    | '/add'
+    | '/add/income'
+    | '/auth/callback'
+    | '/expenses/$expenseId/edit'
+    | '/incomes/$incomeId/edit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/auth/callback' | '/expenses/$expenseId/edit'
-  id: '__root__' | '/' | '/add' | '/auth/callback' | '/expenses/$expenseId/edit'
+  to:
+    | '/'
+    | '/add'
+    | '/add/income'
+    | '/auth/callback'
+    | '/expenses/$expenseId/edit'
+    | '/incomes/$incomeId/edit'
+  id:
+    | '__root__'
+    | '/'
+    | '/add'
+    | '/add/income'
+    | '/auth/callback'
+    | '/expenses/$expenseId/edit'
+    | '/incomes/$incomeId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AddRoute: typeof AddRoute
+  AddRoute: typeof AddRouteWithChildren
   AuthCallbackRoute: typeof AuthCallbackRoute
   ExpensesExpenseIdEditRoute: typeof ExpensesExpenseIdEditRoute
+  IncomesIncomeIdEditRoute: typeof IncomesIncomeIdEditRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,6 +130,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/add/income': {
+      id: '/add/income'
+      path: '/income'
+      fullPath: '/add/income'
+      preLoaderRoute: typeof AddIncomeRouteImport
+      parentRoute: typeof AddRoute
+    }
+    '/incomes/$incomeId/edit': {
+      id: '/incomes/$incomeId/edit'
+      path: '/incomes/$incomeId/edit'
+      fullPath: '/incomes/$incomeId/edit'
+      preLoaderRoute: typeof IncomesIncomeIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/expenses/$expenseId/edit': {
       id: '/expenses/$expenseId/edit'
       path: '/expenses/$expenseId/edit'
@@ -102,11 +154,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AddRouteChildren {
+  AddIncomeRoute: typeof AddIncomeRoute
+}
+
+const AddRouteChildren: AddRouteChildren = {
+  AddIncomeRoute: AddIncomeRoute,
+}
+
+const AddRouteWithChildren = AddRoute._addFileChildren(AddRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AddRoute: AddRoute,
+  AddRoute: AddRouteWithChildren,
   AuthCallbackRoute: AuthCallbackRoute,
   ExpensesExpenseIdEditRoute: ExpensesExpenseIdEditRoute,
+  IncomesIncomeIdEditRoute: IncomesIncomeIdEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

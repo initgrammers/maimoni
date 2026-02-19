@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { House, Plus, Settings, User } from 'lucide-react';
+import { House, Plus, Settings, TrendingUp, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Drawer,
@@ -148,6 +148,22 @@ async function removeExpense(accessToken: string, expenseId: string) {
   }
 }
 
+async function removeIncome(accessToken: string, incomeId: string) {
+  const response = await fetch(`${API_BASE}/api/incomes/${incomeId}`, {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'No se pudo eliminar el ingreso');
+  }
+}
+
 type BoardLimitSettingsCardProps = {
   value: string;
   onChange: (value: string) => void;
@@ -275,6 +291,12 @@ function Dashboard() {
   );
   const [showDeleteExpenseConfirm, setShowDeleteExpenseConfirm] =
     useState(false);
+  const [isIncomeDrawerOpen, setIsIncomeDrawerOpen] = useState(false);
+  const [selectedIncomeId, setSelectedIncomeId] = useState<string | null>(null);
+  const [incomeActionError, setIncomeActionError] = useState<string | null>(
+    null,
+  );
+  const [showDeleteIncomeConfirm, setShowDeleteIncomeConfirm] = useState(false);
 
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
@@ -410,6 +432,25 @@ function Dashboard() {
     },
   );
 
+  const deleteIncomeMutation = useMutation<void, Error, { incomeId: string }>({
+    mutationFn: ({ incomeId }) => {
+      if (!accessToken) {
+        throw new Error('Sesión no disponible');
+      }
+
+      return removeIncome(accessToken, incomeId);
+    },
+    onSuccess: async () => {
+      if (!accessToken) {
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: dashboardQueryKey(accessToken),
+      });
+    },
+  });
+
   const isRefreshingDashboard =
     dashboardQuery.isFetching && !!dashboardQuery.data;
   const showInitialDashboardLoading =
@@ -454,6 +495,17 @@ function Dashboard() {
         movement.id === selectedExpenseId && movement.type === 'expense',
     );
   }, [movements, selectedExpenseId]);
+
+  const selectedIncome = useMemo(() => {
+    if (!selectedIncomeId) {
+      return null;
+    }
+
+    return movements.find(
+      (movement) =>
+        movement.id === selectedIncomeId && movement.type === 'income',
+    );
+  }, [movements, selectedIncomeId]);
 
   const currencyFormatter = useMemo(
     () =>
@@ -523,65 +575,150 @@ function Dashboard() {
       .map((group) => [group.label, group.movements] as const);
   }, [periodMovements]);
 
-  const weeklyExpenses = useMemo(() => {
+  const periodExpenses = useMemo(() => {
     const now = new Date();
-    const day = now.getDay();
-    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monthLabels = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
+    ];
 
-    const startOfCurrentWeek = new Date(now);
-    startOfCurrentWeek.setHours(0, 0, 0, 0);
-    startOfCurrentWeek.setDate(now.getDate() - diffToMonday);
+    if (period === 'week') {
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? 6 : day - 1;
 
-    const startOfPreviousWeek = new Date(startOfCurrentWeek);
-    startOfPreviousWeek.setDate(startOfCurrentWeek.getDate() - 7);
+      const startOfCurrentWeek = new Date(now);
+      startOfCurrentWeek.setHours(0, 0, 0, 0);
+      startOfCurrentWeek.setDate(now.getDate() - diffToMonday);
 
-    const endOfCurrentWeek = new Date(startOfCurrentWeek);
-    endOfCurrentWeek.setDate(startOfCurrentWeek.getDate() + 7);
+      const startOfPreviousWeek = new Date(startOfCurrentWeek);
+      startOfPreviousWeek.setDate(startOfCurrentWeek.getDate() - 7);
 
-    const labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-    const dayTotals = new Array(7).fill(0) as number[];
+      const endOfCurrentWeek = new Date(startOfCurrentWeek);
+      endOfCurrentWeek.setDate(startOfCurrentWeek.getDate() + 7);
+
+      const labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      const dayTotals = new Array(7).fill(0) as number[];
+      let currentTotal = 0;
+      let previousTotal = 0;
+
+      for (const movement of movements) {
+        if (movement.type !== 'expense') continue;
+
+        if (
+          movement.date >= startOfCurrentWeek &&
+          movement.date < endOfCurrentWeek
+        ) {
+          currentTotal += movement.amount;
+          const weekday = movement.date.getDay();
+          const index = weekday === 0 ? 6 : weekday - 1;
+          dayTotals[index] += movement.amount;
+        }
+
+        if (
+          movement.date >= startOfPreviousWeek &&
+          movement.date < startOfCurrentWeek
+        ) {
+          previousTotal += movement.amount;
+        }
+      }
+
+      return {
+        labels,
+        dayTotals,
+        highest: Math.max(...dayTotals, 1),
+        currentTotal,
+        previousTotal,
+        summaryLabel: 'semana',
+      };
+    }
+
+    if (period === 'month') {
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const previousMonthDate = new Date(currentYear, currentMonth - 1, 1);
+      const previousYear = previousMonthDate.getFullYear();
+      const previousMonth = previousMonthDate.getMonth();
+      const labels = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'];
+      const dayTotals = new Array(5).fill(0) as number[];
+      let currentTotal = 0;
+      let previousTotal = 0;
+
+      for (const movement of movements) {
+        if (movement.type !== 'expense') continue;
+
+        const movementYear = movement.date.getFullYear();
+        const movementMonth = movement.date.getMonth();
+
+        if (movementYear === currentYear && movementMonth === currentMonth) {
+          currentTotal += movement.amount;
+          const dayOfMonth = movement.date.getDate();
+          const weekOfMonth = Math.min(Math.floor((dayOfMonth - 1) / 7), 4);
+          dayTotals[weekOfMonth] += movement.amount;
+        }
+
+        if (movementYear === previousYear && movementMonth === previousMonth) {
+          previousTotal += movement.amount;
+        }
+      }
+
+      return {
+        labels,
+        dayTotals,
+        highest: Math.max(...dayTotals, 1),
+        currentTotal,
+        previousTotal,
+        summaryLabel: 'mes',
+      };
+    }
+
+    const currentYear = now.getFullYear();
+    const previousYear = currentYear - 1;
+    const dayTotals = new Array(12).fill(0) as number[];
     let currentTotal = 0;
     let previousTotal = 0;
 
     for (const movement of movements) {
       if (movement.type !== 'expense') continue;
 
-      if (
-        movement.date >= startOfCurrentWeek &&
-        movement.date < endOfCurrentWeek
-      ) {
+      const movementYear = movement.date.getFullYear();
+
+      if (movementYear === currentYear) {
         currentTotal += movement.amount;
-        const weekday = movement.date.getDay();
-        const index = weekday === 0 ? 6 : weekday - 1;
-        dayTotals[index] += movement.amount;
+        dayTotals[movement.date.getMonth()] += movement.amount;
       }
 
-      if (
-        movement.date >= startOfPreviousWeek &&
-        movement.date < startOfCurrentWeek
-      ) {
+      if (movementYear === previousYear) {
         previousTotal += movement.amount;
       }
     }
 
-    const highest = Math.max(...dayTotals, 1);
-
     return {
-      labels,
+      labels: monthLabels,
       dayTotals,
-      highest,
+      highest: Math.max(...dayTotals, 1),
       currentTotal,
       previousTotal,
+      summaryLabel: 'año',
     };
-  }, [movements]);
+  }, [movements, period]);
 
-  const weekChange = useMemo(() => {
-    const { currentTotal, previousTotal } = weeklyExpenses;
+  const periodChange = useMemo(() => {
+    const { currentTotal, previousTotal } = periodExpenses;
     if (previousTotal === 0) {
       return currentTotal > 0 ? 100 : 0;
     }
     return ((currentTotal - previousTotal) / previousTotal) * 100;
-  }, [weeklyExpenses]);
+  }, [periodExpenses]);
 
   const monthlyExpenseTotal = useMemo(() => {
     const now = new Date();
@@ -755,6 +892,27 @@ function Dashboard() {
     setIsExpenseDrawerOpen(true);
   }
 
+  function handleIncomeDrawerOpenChange(open: boolean) {
+    setIsIncomeDrawerOpen(open);
+
+    if (!open) {
+      setSelectedIncomeId(null);
+      setIncomeActionError(null);
+      setShowDeleteIncomeConfirm(false);
+    }
+  }
+
+  function openIncomeDetails(income: DisplayMovement) {
+    if (income.type !== 'income') {
+      return;
+    }
+
+    setSelectedIncomeId(income.id);
+    setIncomeActionError(null);
+    setShowDeleteIncomeConfirm(false);
+    setIsIncomeDrawerOpen(true);
+  }
+
   async function deleteSelectedExpense() {
     if (!selectedExpenseId) {
       return;
@@ -775,6 +933,26 @@ function Dashboard() {
     }
   }
 
+  async function deleteSelectedIncome() {
+    if (!selectedIncomeId) {
+      return;
+    }
+
+    setIncomeActionError(null);
+    try {
+      await deleteIncomeMutation.mutateAsync({
+        incomeId: selectedIncomeId,
+      });
+      handleIncomeDrawerOpenChange(false);
+    } catch (deleteError) {
+      setIncomeActionError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : 'No se pudo eliminar el ingreso',
+      );
+    }
+  }
+
   useEffect(() => {
     if (!isExpenseDrawerOpen) {
       return;
@@ -787,6 +965,19 @@ function Dashboard() {
       setShowDeleteExpenseConfirm(false);
     }
   }, [isExpenseDrawerOpen, selectedExpense]);
+
+  useEffect(() => {
+    if (!isIncomeDrawerOpen) {
+      return;
+    }
+
+    if (!selectedIncome) {
+      setIsIncomeDrawerOpen(false);
+      setSelectedIncomeId(null);
+      setIncomeActionError(null);
+      setShowDeleteIncomeConfirm(false);
+    }
+  }, [isIncomeDrawerOpen, selectedIncome]);
 
   if (!accessToken) {
     return (
@@ -893,41 +1084,46 @@ function Dashboard() {
                   <div className="absolute right-4 top-4 h-5 w-5 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
                 )}
                 <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
-                  {currencyFormatter.format(weeklyExpenses.currentTotal)}
+                  {currencyFormatter.format(periodExpenses.currentTotal)}
                 </p>
                 <p className="flex items-center gap-2 text-base text-slate-400">
-                  Total gastado esta semana
+                  {`Total gastado este ${periodExpenses.summaryLabel}`}
                   <span
                     className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
-                      weekChange >= 0
+                      periodChange >= 0
                         ? 'bg-emerald-100 text-emerald-700'
                         : 'bg-rose-100 text-rose-700'
                     }`}
                   >
-                    {weekChange >= 0 ? '↑' : '↓'}{' '}
-                    {Math.abs(weekChange).toFixed(0)}%
+                    {periodChange >= 0 ? '↑' : '↓'}{' '}
+                    {Math.abs(periodChange).toFixed(0)}%
                   </span>
                 </p>
 
-                <div className="mt-7 grid grid-cols-7 items-end gap-2">
-                  {weeklyExpenses.dayTotals.map((amount, index) => (
+                <div
+                  className="mt-7 grid items-end gap-2"
+                  style={{
+                    gridTemplateColumns: `repeat(${periodExpenses.labels.length}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {periodExpenses.dayTotals.map((amount, index) => (
                     <div
-                      key={weeklyExpenses.labels[index]}
+                      key={periodExpenses.labels[index]}
                       className="text-center"
                     >
-                      <div className="mx-auto mb-2 flex h-28 w-7 items-end overflow-hidden rounded-xl bg-slate-100">
+                      <div className="mx-auto mb-2 flex h-28 w-full items-end overflow-hidden rounded-xl bg-slate-100">
                         <div
                           className="w-full rounded-xl bg-slate-900 transition-all duration-300"
                           style={{
                             height: `${Math.max(
                               12,
-                              (amount / weeklyExpenses.highest) * 100,
+                              (amount / periodExpenses.highest) * 100,
                             )}%`,
                           }}
                         />
                       </div>
                       <p className="text-xs font-medium text-slate-400">
-                        {weeklyExpenses.labels[index]}
+                        {periodExpenses.labels[index]}
                       </p>
                     </div>
                   ))}
@@ -1047,11 +1243,9 @@ function Dashboard() {
                                     {movement.note}
                                   </p>
                                 )}
-                                {movement.type === 'expense' && (
-                                  <p className="mt-0.5 text-xs text-slate-400">
-                                    Toca para ver o editar
-                                  </p>
-                                )}
+                                <p className="mt-0.5 text-xs text-slate-400">
+                                  Toca para ver o editar
+                                </p>
                               </div>
                             </div>
                             <p
@@ -1080,12 +1274,14 @@ function Dashboard() {
                         }
 
                         return (
-                          <div
+                          <button
                             key={movement.id}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3"
+                            type="button"
+                            onClick={() => openIncomeDetails(movement)}
+                            className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3 text-left transition-all active:scale-[0.99]"
                           >
                             {content}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -1297,6 +1493,133 @@ function Dashboard() {
         </DrawerContent>
       </Drawer>
 
+      <Drawer
+        open={isIncomeDrawerOpen}
+        onOpenChange={handleIncomeDrawerOpenChange}
+      >
+        <DrawerContent>
+          <DrawerHeader className="pb-2">
+            <DrawerTitle>Detalle del ingreso</DrawerTitle>
+            <DrawerDescription>
+              Puedes revisar, editar o eliminar este ingreso.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="space-y-4 px-4 pb-2">
+            {!selectedIncome ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No encontramos ese ingreso. Cierra e intenta nuevamente.
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-2xl font-semibold tracking-tight text-slate-950">
+                  {currencyFormatter.format(selectedIncome.amount)}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Categoría:</span>{' '}
+                  {selectedIncome.categoryEmoji} {selectedIncome.categoryName}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Fecha:</span>{' '}
+                  {dayjs(selectedIncome.date).format('D MMM YYYY')}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Nota:</span>{' '}
+                  {selectedIncome.note ?? 'Sin nota'}
+                </p>
+              </div>
+            )}
+
+            {showDeleteIncomeConfirm && selectedIncome && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                Esta acción eliminará el ingreso del tablero. Puedes continuar
+                solo si estás seguro.
+              </div>
+            )}
+
+            {incomeActionError && (
+              <p className="rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">
+                {incomeActionError}
+              </p>
+            )}
+          </div>
+
+          <DrawerFooter className="pb-8">
+            {!selectedIncome ? (
+              <DrawerClose asChild>
+                <button
+                  type="button"
+                  className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white transition-all active:scale-[0.98]"
+                >
+                  Cerrar
+                </button>
+              </DrawerClose>
+            ) : showDeleteIncomeConfirm ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void deleteSelectedIncome();
+                  }}
+                  disabled={deleteIncomeMutation.isPending}
+                  className="w-full rounded-[20px] bg-rose-600 py-4 text-base font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  {deleteIncomeMutation.isPending
+                    ? 'Eliminando...'
+                    : 'Si, eliminar ingreso'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteIncomeConfirm(false);
+                    setIncomeActionError(null);
+                  }}
+                  disabled={deleteIncomeMutation.isPending}
+                  className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate({
+                      to: `/incomes/${selectedIncome.id}/edit` as never,
+                    });
+                    handleIncomeDrawerOpenChange(false);
+                    setIncomeActionError(null);
+                    setShowDeleteIncomeConfirm(false);
+                  }}
+                  className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white transition-all active:scale-[0.98]"
+                >
+                  Editar ingreso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteIncomeConfirm(true);
+                    setIncomeActionError(null);
+                  }}
+                  className="w-full rounded-[20px] border border-rose-300 bg-rose-50 py-4 text-base font-semibold text-rose-700 transition-all active:scale-[0.98]"
+                >
+                  Eliminar ingreso
+                </button>
+                <DrawerClose asChild>
+                  <button
+                    type="button"
+                    className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98]"
+                  >
+                    Cerrar
+                  </button>
+                </DrawerClose>
+              </>
+            )}
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
       <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-6 backdrop-blur">
         <div className="mx-auto grid w-full max-w-md grid-cols-3 items-center">
           <button
@@ -1312,7 +1635,16 @@ function Dashboard() {
             <House className="h-6 w-6" />
           </button>
 
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              to="/add/income"
+              search={(current) => current}
+              params={(current) => current}
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-200/80 bg-white text-emerald-600 shadow-sm transition-all hover:bg-emerald-50 active:scale-95"
+              aria-label="Agregar ingreso"
+            >
+              <TrendingUp className="h-5 w-5" strokeWidth={2.5} />
+            </Link>
             <Link
               to="/add"
               search={(current) => current}

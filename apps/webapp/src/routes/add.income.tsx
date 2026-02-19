@@ -1,11 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  useRouter,
-} from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import {
@@ -28,23 +22,31 @@ import {
 } from '../components/ui/drawer';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
-import type { Category, Subcategory } from '../types';
+import type { Category, MovementType, Subcategory } from '../types';
 
 const API_BASE = getApiBase();
 const dashboardQueryKey = (accessToken: string) =>
   ['dashboard', accessToken] as const;
-const categoriesQueryKey = (accessToken: string) =>
-  ['categories', accessToken, 'expense'] as const;
+const categoriesQueryKey = (accessToken: string, type: MovementType) =>
+  ['categories', accessToken, type] as const;
+const INCOME_PAGE_TITLE = 'Nuevo ingreso';
 
-export const Route = createFileRoute('/add' as never)({
+export const Route = createFileRoute('/add/income' as never)({
   beforeLoad: () => {
     requireClientAuth();
   },
-  component: AddRouteComponent,
+  head: () => ({
+    meta: [
+      {
+        title: `${INCOME_PAGE_TITLE} · Maimoni`,
+      },
+    ],
+  }),
+  component: AddIncome,
 });
 
-async function fetchCategories(accessToken: string) {
-  const response = await fetch(`${API_BASE}/api/categories?type=expense`, {
+async function fetchCategories(accessToken: string, type: MovementType) {
+  const response = await fetch(`${API_BASE}/api/categories?type=${type}`, {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
@@ -105,18 +107,7 @@ interface ScanResponse {
 
 dayjs.locale('es');
 
-function AddRouteComponent() {
-  const router = useRouter();
-  const isChildRouteActive = router.state.location.pathname !== '/add';
-
-  if (isChildRouteActive) {
-    return <Outlet />;
-  }
-
-  return <AddExpenseForm />;
-}
-
-function AddExpenseForm() {
+function AddIncome() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const amountInputId = useId();
@@ -155,23 +146,24 @@ function AddExpenseForm() {
     null,
   );
 
-  const categoriesQuery = useQuery<Category[], Error>({
+  const categoriesIncomeQuery = useQuery<Category[], Error>({
     queryKey: accessToken
-      ? categoriesQueryKey(accessToken)
-      : (['categories', 'guest'] as const),
+      ? categoriesQueryKey(accessToken, 'income')
+      : (['categories', 'guest', 'income'] as const),
     queryFn: () => {
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
 
-      return fetchCategories(accessToken);
+      return fetchCategories(accessToken, 'income');
     },
     enabled: Boolean(accessToken),
     staleTime: 5 * 60_000,
   });
 
-  const categories = categoriesQuery.data ?? [];
-  const isCategoriesLoading = Boolean(accessToken) && categoriesQuery.isPending;
+  const categoriesIncome = categoriesIncomeQuery.data ?? [];
+  const isCategoriesLoading =
+    Boolean(accessToken) && categoriesIncomeQuery.isPending;
 
   const scanMutation = useMutation<ScanResponse, Error, File>({
     mutationFn: (file) => {
@@ -183,10 +175,11 @@ function AddExpenseForm() {
     },
   });
 
-  const createExpenseMutation = useMutation<
+  const createMovementMutation = useMutation<
     void,
     Error,
     {
+      movementType: MovementType;
       amount: string;
       categoryId: string;
       note?: string;
@@ -203,7 +196,7 @@ function AddExpenseForm() {
         queryFn: () => fetchDashboard(accessToken),
       });
 
-      const response = await fetch(`${API_BASE}/api/expenses`, {
+      const response = await fetch(`${API_BASE}/api/incomes`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -222,7 +215,7 @@ function AddExpenseForm() {
         const result = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(result?.error ?? 'Error al guardar gasto');
+        throw new Error(result?.error ?? 'Error al guardar ingreso');
       }
     },
     onSuccess: async () => {
@@ -239,16 +232,16 @@ function AddExpenseForm() {
   });
 
   useEffect(() => {
-    if (!pendingScanCategory || categories.length === 0) return;
+    if (!pendingScanCategory) return;
 
-    const matched = categories.find(
+    const matched = categoriesIncome.find(
       (cat) => cat.name.toLowerCase() === pendingScanCategory.toLowerCase(),
     );
     if (matched) {
       setSelectedCategory(matched);
     }
     setPendingScanCategory(null);
-  }, [categories, pendingScanCategory]);
+  }, [categoriesIncome, pendingScanCategory]);
 
   const handleScanFile = async (file: File) => {
     if (!accessToken) return;
@@ -271,8 +264,13 @@ function AddExpenseForm() {
       }
       setNote(result.note || result.merchant_name || '');
 
-      if (result.type === 'expense') {
-        const matched = categories.find(
+      if (result.type !== 'income') {
+        setSelectedCategory(null);
+        setSelectedSubcategory(null);
+        setShowCategories(false);
+        setShowSubcategories(false);
+      } else {
+        const matched = categoriesIncome.find(
           (cat) => cat.name.toLowerCase() === result.category.toLowerCase(),
         );
         if (matched) {
@@ -301,7 +299,8 @@ function AddExpenseForm() {
     setError(null);
 
     try {
-      await createExpenseMutation.mutateAsync({
+      await createMovementMutation.mutateAsync({
+        movementType: 'income',
         amount,
         categoryId: selectedSubcategory?.id || selectedCategory.id,
         note: note || undefined,
@@ -316,7 +315,7 @@ function AddExpenseForm() {
     <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
       <header className="mx-auto flex w-full max-w-md items-center justify-between px-5 pb-6 pt-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Nuevo gasto
+          {INCOME_PAGE_TITLE}
         </h1>
         <Link
           to="/"
@@ -346,7 +345,7 @@ function AddExpenseForm() {
             type="button"
             disabled={scanMutation.isPending}
             onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-rose-300 bg-rose-50 p-5 font-semibold text-rose-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-emerald-300 bg-emerald-50 p-5 font-semibold text-emerald-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {scanMutation.isPending ? (
               <>
@@ -504,12 +503,12 @@ function AddExpenseForm() {
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
                   </div>
-                ) : categories.length === 0 ? (
+                ) : categoriesIncome.length === 0 ? (
                   <p className="p-4 text-center text-sm text-slate-500">
-                    No hay categorías disponibles.
+                    No hay categorías de ingresos disponibles.
                   </p>
                 ) : (
-                  categories.map((category) => (
+                  categoriesIncome.map((category) => (
                     <button
                       type="button"
                       key={category.id}
@@ -579,7 +578,7 @@ function AddExpenseForm() {
                     >
                       <span className="text-xl">✨</span>
                       <span className="font-medium text-slate-500">
-                        Ninguna (solo {selectedCategory.name})
+                        Ninguna ({selectedCategory.name})
                       </span>
                     </button>
                     {selectedCategory.subcategories.map((sub) => (
@@ -619,7 +618,7 @@ function AddExpenseForm() {
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Ej: Almuerzo con el equipo"
+              placeholder="Ej: Salario mensual"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 placeholder:text-slate-400 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
@@ -634,16 +633,16 @@ function AddExpenseForm() {
             <button
               type="submit"
               disabled={
-                !amount || !selectedCategory || createExpenseMutation.isPending
+                !amount || !selectedCategory || createMovementMutation.isPending
               }
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 hover:bg-rose-700 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {createExpenseMutation.isPending && (
+              {createMovementMutation.isPending && (
                 <Loader2 className="h-5 w-5 animate-spin" />
               )}
-              {createExpenseMutation.isPending
+              {createMovementMutation.isPending
                 ? 'Guardando...'
-                : 'Guardar gasto'}
+                : 'Guardar ingreso'}
             </button>
             <Link
               to="/"

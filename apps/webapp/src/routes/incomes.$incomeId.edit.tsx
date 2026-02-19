@@ -1,21 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  useRouter,
-} from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import {
-  Calendar as CalendarIcon,
-  Camera,
-  Check,
-  Loader2,
-  X,
-} from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { Calendar as CalendarIcon, Check, Loader2, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Calendar } from '../components/ui/calendar';
 import {
   Drawer,
@@ -30,21 +18,33 @@ import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, Subcategory } from '../types';
 
+type IncomeDetail = {
+  id: string;
+  amount: string;
+  categoryId: string;
+  note: string | null;
+  date: string;
+};
+
 const API_BASE = getApiBase();
 const dashboardQueryKey = (accessToken: string) =>
   ['dashboard', accessToken] as const;
 const categoriesQueryKey = (accessToken: string) =>
-  ['categories', accessToken, 'expense'] as const;
+  ['categories', accessToken, 'income'] as const;
+const incomeQueryKey = (accessToken: string, incomeId: string) =>
+  ['income', accessToken, incomeId] as const;
 
-export const Route = createFileRoute('/add' as never)({
+dayjs.locale('es');
+
+export const Route = createFileRoute('/incomes/$incomeId/edit' as never)({
   beforeLoad: () => {
     requireClientAuth();
   },
-  component: AddRouteComponent,
+  component: EditIncome,
 });
 
 async function fetchCategories(accessToken: string) {
-  const response = await fetch(`${API_BASE}/api/categories?type=expense`, {
+  const response = await fetch(`${API_BASE}/api/categories?type=income`, {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
@@ -57,82 +57,72 @@ async function fetchCategories(accessToken: string) {
   return (await response.json()) as Category[];
 }
 
-async function fetchDashboard(accessToken: string) {
-  const response = await fetch(`${API_BASE}/api/dashboard`, {
+async function fetchIncome(accessToken: string, incomeId: string) {
+  const response = await fetch(`${API_BASE}/api/incomes/${incomeId}`, {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error('No se pudo obtener el tablero');
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(payload?.error ?? 'No se pudo cargar el ingreso');
   }
 
-  return (await response.json()) as { board: { id: string } };
+  return (await response.json()) as IncomeDetail;
 }
 
-async function scanReceipt(accessToken: string, file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${API_BASE}/api/scan`, {
-    method: 'POST',
+async function updateIncome(
+  accessToken: string,
+  incomeId: string,
+  payload: {
+    amount: string;
+    categoryId: string;
+    note: string | null;
+    date: string;
+  },
+) {
+  const response = await fetch(`${API_BASE}/api/incomes/${incomeId}`, {
+    method: 'PATCH',
     headers: {
       authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
     },
-    body: formData,
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const result = (await response.json().catch(() => null)) as {
       error?: string;
     } | null;
-    throw new Error(result?.error ?? 'Error al escanear el recibo');
+    throw new Error(result?.error ?? 'No se pudo actualizar el ingreso');
   }
-
-  return (await response.json()) as ScanResponse;
 }
 
-interface ScanResponse {
-  total_amount: number;
-  date: string;
-  merchant_name: string;
-  category: string;
-  type: 'expense' | 'income';
-  note: string;
-  items: Array<{ name: string; price: number }>;
-}
-
-dayjs.locale('es');
-
-function AddRouteComponent() {
-  const router = useRouter();
-  const isChildRouteActive = router.state.location.pathname !== '/add';
-
-  if (isChildRouteActive) {
-    return <Outlet />;
-  }
-
-  return <AddExpenseForm />;
-}
-
-function AddExpenseForm() {
+function EditIncome() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const amountInputId = useId();
   const dateInputId = useId();
   const noteInputId = useId();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { incomeId } = Route.useParams();
+
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  });
+  const [date, setDate] = useState(() => dayjs().format('YYYY-MM-DD'));
   const [month, setMonth] = useState<Date>(() => new Date(`${date}T12:00:00`));
+  const [note, setNote] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
+    null,
+  );
+  const [selectedSubcategory, setSelectedSubcategory] =
+    useState<Subcategory | null>(null);
+  const [showCategories, setShowCategories] = useState(false);
+  const [showSubcategories, setShowSubcategories] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initializedCategory, setInitializedCategory] = useState(false);
 
   useEffect(() => {
     setMonth(new Date(`${date}T12:00:00`));
@@ -142,23 +132,10 @@ function AddExpenseForm() {
     setAccessToken(window.localStorage.getItem('accessToken'));
   }, []);
 
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-    null,
-  );
-  const [selectedSubcategory, setSelectedSubcategory] =
-    useState<Subcategory | null>(null);
-  const [note, setNote] = useState('');
-  const [showCategories, setShowCategories] = useState(false);
-  const [showSubcategories, setShowSubcategories] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingScanCategory, setPendingScanCategory] = useState<string | null>(
-    null,
-  );
-
   const categoriesQuery = useQuery<Category[], Error>({
     queryKey: accessToken
       ? categoriesQueryKey(accessToken)
-      : (['categories', 'guest'] as const),
+      : (['categories', 'guest', 'income'] as const),
     queryFn: () => {
       if (!accessToken) {
         throw new Error('No hay sesión activa');
@@ -170,66 +147,89 @@ function AddExpenseForm() {
     staleTime: 5 * 60_000,
   });
 
-  const categories = categoriesQuery.data ?? [];
-  const isCategoriesLoading = Boolean(accessToken) && categoriesQuery.isPending;
-
-  const scanMutation = useMutation<ScanResponse, Error, File>({
-    mutationFn: (file) => {
+  const incomeQuery = useQuery<IncomeDetail, Error>({
+    queryKey: accessToken
+      ? incomeQueryKey(accessToken, incomeId)
+      : (['income', 'guest', incomeId] as const),
+    queryFn: () => {
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
 
-      return scanReceipt(accessToken, file);
+      return fetchIncome(accessToken, incomeId);
     },
+    enabled: Boolean(accessToken),
   });
 
-  const createExpenseMutation = useMutation<
+  const categories = categoriesQuery.data ?? [];
+
+  useEffect(() => {
+    if (!incomeQuery.data) {
+      return;
+    }
+
+    setAmount(incomeQuery.data.amount);
+    setDate(dayjs(incomeQuery.data.date).format('YYYY-MM-DD'));
+    setNote(incomeQuery.data.note ?? '');
+  }, [incomeQuery.data]);
+
+  useEffect(() => {
+    if (initializedCategory || !incomeQuery.data || categories.length === 0) {
+      return;
+    }
+
+    const directCategory = categories.find(
+      (category) => category.id === incomeQuery.data?.categoryId,
+    );
+
+    if (directCategory) {
+      setSelectedCategory(directCategory);
+      setSelectedSubcategory(null);
+      setInitializedCategory(true);
+      return;
+    }
+
+    for (const category of categories) {
+      const matchedSubcategory = category.subcategories?.find(
+        (subcategory) => subcategory.id === incomeQuery.data?.categoryId,
+      );
+
+      if (matchedSubcategory) {
+        setSelectedCategory(category);
+        setSelectedSubcategory(matchedSubcategory);
+        setInitializedCategory(true);
+        return;
+      }
+    }
+  }, [initializedCategory, incomeQuery.data, categories]);
+
+  const updateMutation = useMutation<
     void,
     Error,
     {
       amount: string;
       categoryId: string;
-      note?: string;
+      note: string | null;
       date: string;
     }
   >({
-    mutationFn: async ({ amount, categoryId, note, date }) => {
+    mutationFn: async (payload) => {
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
 
-      const dashboard = await queryClient.fetchQuery({
-        queryKey: dashboardQueryKey(accessToken),
-        queryFn: () => fetchDashboard(accessToken),
-      });
-
-      const response = await fetch(`${API_BASE}/api/expenses`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          boardId: dashboard.board.id,
-          amount,
-          categoryId,
-          note,
-          date,
-        }),
-      });
-
-      if (!response.ok) {
-        const result = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        throw new Error(result?.error ?? 'Error al guardar gasto');
-      }
+      return updateIncome(accessToken, incomeId, payload);
     },
     onSuccess: async () => {
       if (accessToken) {
-        await queryClient.invalidateQueries({
-          queryKey: dashboardQueryKey(accessToken),
-        });
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: dashboardQueryKey(accessToken),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: incomeQueryKey(accessToken, incomeId),
+          }),
+        ]);
       }
 
       navigate({
@@ -238,77 +238,50 @@ function AddExpenseForm() {
     },
   });
 
-  useEffect(() => {
-    if (!pendingScanCategory || categories.length === 0) return;
-
-    const matched = categories.find(
-      (cat) => cat.name.toLowerCase() === pendingScanCategory.toLowerCase(),
-    );
-    if (matched) {
-      setSelectedCategory(matched);
+  const loadingMessage = useMemo(() => {
+    if (incomeQuery.isPending || categoriesQuery.isPending) {
+      return 'Cargando datos del ingreso...';
     }
-    setPendingScanCategory(null);
-  }, [categories, pendingScanCategory]);
 
-  const handleScanFile = async (file: File) => {
-    if (!accessToken) return;
+    return null;
+  }, [incomeQuery.isPending, categoriesQuery.isPending]);
 
-    setError(null);
+  const submitDisabled =
+    !amount ||
+    !selectedCategory ||
+    updateMutation.isPending ||
+    incomeQuery.isPending ||
+    categoriesQuery.isPending;
 
-    try {
-      const result = await scanMutation.mutateAsync(file);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-      setAmount(result.total_amount.toString());
-      if (result.date) {
-        try {
-          const parsedDate = new Date(result.date);
-          if (!Number.isNaN(parsedDate.getTime())) {
-            setDate(parsedDate.toISOString().split('T')[0]);
-          }
-        } catch (e) {
-          console.error('Error al parsear la fecha escaneada:', e);
-        }
-      }
-      setNote(result.note || result.merchant_name || '');
-
-      if (result.type === 'expense') {
-        const matched = categories.find(
-          (cat) => cat.name.toLowerCase() === result.category.toLowerCase(),
-        );
-        if (matched) {
-          setSelectedCategory(matched);
-          setShowCategories(false);
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al escanear');
-    } finally {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    if (!selectedCategory) {
+      setError('Selecciona una categoría');
+      return;
     }
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || !selectedCategory) return;
-
-    if (!accessToken) {
-      setError('No hay sesión activa');
+    const normalizedAmount = amount.trim().replace(',', '.');
+    if (!/^\d+(\.\d{1,2})?$/.test(normalizedAmount)) {
+      setError('Ingresa un monto válido con hasta 2 decimales');
       return;
     }
 
     setError(null);
 
     try {
-      await createExpenseMutation.mutateAsync({
-        amount,
-        categoryId: selectedSubcategory?.id || selectedCategory.id,
-        note: note || undefined,
+      await updateMutation.mutateAsync({
+        amount: normalizedAmount,
+        categoryId: selectedSubcategory?.id ?? selectedCategory.id,
+        note: note.trim() ? note.trim() : null,
         date: new Date(`${date}T12:00:00`).toISOString(),
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar');
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : 'No se pudo actualizar el ingreso',
+      );
     }
   };
 
@@ -316,7 +289,7 @@ function AddExpenseForm() {
     <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
       <header className="mx-auto flex w-full max-w-md items-center justify-between px-5 pb-6 pt-8">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Nuevo gasto
+          Editar ingreso
         </h1>
         <Link
           to="/"
@@ -330,36 +303,12 @@ function AddExpenseForm() {
 
       <main className="mx-auto w-full max-w-md px-5 pb-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleScanFile(file);
-            }}
-          />
-
-          <button
-            type="button"
-            disabled={scanMutation.isPending}
-            onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-rose-300 bg-rose-50 p-5 font-semibold text-rose-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {scanMutation.isPending ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Analizando recibo...
-              </>
-            ) : (
-              <>
-                <Camera className="h-5 w-5" />
-                Escanear recibo
-              </>
-            )}
-          </button>
+          {loadingMessage && (
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {loadingMessage}
+            </div>
+          )}
 
           <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <label
@@ -384,29 +333,9 @@ function AddExpenseForm() {
               </DrawerTrigger>
               <DrawerContent>
                 <DrawerHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <DrawerTitle className="text-xl font-bold">
-                      Seleccionar fecha
-                    </DrawerTitle>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const now = new Date();
-                        const year = now.getFullYear();
-                        const month = String(now.getMonth() + 1).padStart(
-                          2,
-                          '0',
-                        );
-                        const day = String(now.getDate()).padStart(2, '0');
-                        const dateStr = `${year}-${month}-${day}`;
-                        setDate(dateStr);
-                        setMonth(new Date(`${dateStr}T12:00:00`));
-                      }}
-                      className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600 transition-all active:scale-95 hover:bg-slate-200"
-                    >
-                      Hoy
-                    </button>
-                  </div>
+                  <DrawerTitle className="text-xl font-bold">
+                    Seleccionar fecha
+                  </DrawerTitle>
                 </DrawerHeader>
                 <div className="flex justify-center p-4">
                   <Calendar
@@ -414,13 +343,7 @@ function AddExpenseForm() {
                     selected={date ? new Date(`${date}T00:00:00`) : undefined}
                     onSelect={(newDate) => {
                       if (newDate) {
-                        const year = newDate.getFullYear();
-                        const month = String(newDate.getMonth() + 1).padStart(
-                          2,
-                          '0',
-                        );
-                        const day = String(newDate.getDate()).padStart(2, '0');
-                        setDate(`${year}-${month}-${day}`);
+                        setDate(dayjs(newDate).format('YYYY-MM-DD'));
                       }
                     }}
                     month={month}
@@ -455,10 +378,10 @@ function AddExpenseForm() {
               </span>
               <input
                 id={amountInputId}
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(event) => setAmount(event.target.value)}
                 placeholder="0.00"
                 required
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 py-5 text-3xl font-semibold text-slate-900 placeholder:text-slate-300 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
@@ -474,20 +397,16 @@ function AddExpenseForm() {
               <button
                 type="button"
                 onClick={() => setShowCategories(true)}
-                disabled={isCategoriesLoading}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98]"
               >
-                {isCategoriesLoading ? 'Cargando...' : 'Seleccionar categoría'}
+                Seleccionar categoría
               </button>
             )}
             {!showCategories && selectedCategory && (
               <button
                 type="button"
-                onClick={() => {
-                  setShowCategories(true);
-                }}
-                disabled={isCategoriesLoading}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98] disabled:opacity-50"
+                onClick={() => setShowCategories(true)}
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98]"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{selectedCategory.emoji}</span>
@@ -499,38 +418,28 @@ function AddExpenseForm() {
               </button>
             )}
             {showCategories && (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {isCategoriesLoading ? (
-                  <div className="flex items-center justify-center p-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-                  </div>
-                ) : categories.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-slate-500">
-                    No hay categorías disponibles.
-                  </p>
-                ) : (
-                  categories.map((category) => (
-                    <button
-                      type="button"
-                      key={category.id}
-                      onClick={() => {
-                        setSelectedCategory(category);
-                        setSelectedSubcategory(null);
-                        setShowCategories(false);
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
-                        selectedCategory?.id === category.id
-                          ? 'border-slate-300 bg-slate-100'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="text-2xl">{category.emoji}</span>
-                      <span className="font-semibold text-slate-800">
-                        {category.name}
-                      </span>
-                    </button>
-                  ))
-                )}
+              <div className="max-h-80 space-y-2 overflow-y-auto">
+                {categories.map((category) => (
+                  <button
+                    type="button"
+                    key={category.id}
+                    onClick={() => {
+                      setSelectedCategory(category);
+                      setSelectedSubcategory(null);
+                      setShowCategories(false);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
+                      selectedCategory?.id === category.id
+                        ? 'border-slate-300 bg-slate-100'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-2xl">{category.emoji}</span>
+                    <span className="font-semibold text-slate-800">
+                      {category.name}
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -568,7 +477,7 @@ function AddExpenseForm() {
                   </button>
                 )}
                 {showSubcategories && (
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                  <div className="max-h-80 space-y-2 overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => {
@@ -582,23 +491,23 @@ function AddExpenseForm() {
                         Ninguna (solo {selectedCategory.name})
                       </span>
                     </button>
-                    {selectedCategory.subcategories.map((sub) => (
+                    {selectedCategory.subcategories.map((subcategory) => (
                       <button
                         type="button"
-                        key={sub.id}
+                        key={subcategory.id}
                         onClick={() => {
-                          setSelectedSubcategory(sub);
+                          setSelectedSubcategory(subcategory);
                           setShowSubcategories(false);
                         }}
                         className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
-                          selectedSubcategory?.id === sub.id
+                          selectedSubcategory?.id === subcategory.id
                             ? 'border-slate-300 bg-slate-100'
                             : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
                       >
-                        <span className="text-xl">{sub.emoji}</span>
+                        <span className="text-xl">{subcategory.emoji}</span>
                         <span className="font-semibold text-slate-800">
-                          {sub.name}
+                          {subcategory.name}
                         </span>
                       </button>
                     ))}
@@ -618,8 +527,8 @@ function AddExpenseForm() {
               id={noteInputId}
               type="text"
               value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Ej: Almuerzo con el equipo"
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Ej: Pago freelance"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 placeholder:text-slate-400 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
@@ -630,29 +539,28 @@ function AddExpenseForm() {
             </div>
           )}
 
-          <div className="pt-4 space-y-3">
+          <div className="space-y-3 pt-4">
             <button
               type="submit"
-              disabled={
-                !amount || !selectedCategory || createExpenseMutation.isPending
-              }
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 hover:bg-rose-700 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={submitDisabled}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {createExpenseMutation.isPending && (
+              {updateMutation.isPending && (
                 <Loader2 className="h-5 w-5 animate-spin" />
               )}
-              {createExpenseMutation.isPending
-                ? 'Guardando...'
-                : 'Guardar gasto'}
+              {updateMutation.isPending
+                ? 'Guardando cambios...'
+                : 'Guardar cambios'}
             </button>
-            <Link
-              to="/"
-              search={(current) => current}
-              params={(current) => current}
+            <button
+              type="button"
+              onClick={() => {
+                navigate({ to: '/' as never });
+              }}
               className="block w-full rounded-2xl border border-slate-300 bg-white py-5 text-center font-semibold text-slate-600 transition-all active:scale-[0.98]"
             >
               Cancelar
-            </Link>
+            </button>
           </div>
         </form>
       </main>

@@ -95,7 +95,13 @@ app.get('/api/dashboard', async (c) => {
       })
       .from(incomes)
       .innerJoin(categories, eq(incomes.categoryId, categories.id))
-      .where(and(eq(incomes.userId, userId), eq(incomes.boardId, board.id))),
+      .where(
+        and(
+          eq(incomes.userId, userId),
+          eq(incomes.boardId, board.id),
+          eq(incomes.isActive, true),
+        ),
+      ),
     db
       .select({
         expense: expenses,
@@ -193,6 +199,20 @@ const expenseUpdateSchema = z
     message: 'Debes enviar al menos un campo para actualizar',
   });
 
+const incomeUpdateSchema = z
+  .object({
+    amount: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
+    categoryId: z.string().uuid().optional(),
+    note: z.string().nullable().optional(),
+    date: z.string().datetime().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Debes enviar al menos un campo para actualizar',
+  });
+
 const boardSettingsSchema = z.object({
   spendingLimitAmount: z
     .string()
@@ -208,9 +228,42 @@ app.get('/api/incomes', async (c) => {
   const result = await db
     .select()
     .from(incomes)
-    .where(and(eq(incomes.userId, userId), eq(incomes.boardId, boardId)));
+    .where(
+      and(
+        eq(incomes.userId, userId),
+        eq(incomes.boardId, boardId),
+        eq(incomes.isActive, true),
+      ),
+    );
 
   return c.json(result);
+});
+
+app.get('/api/incomes/:incomeId', async (c) => {
+  const userId = c.get('userId');
+  const incomeId = c.req.param('incomeId');
+  const incomeIdResult = z.string().uuid().safeParse(incomeId);
+  if (!incomeIdResult.success) {
+    return c.json({ error: 'incomeId inválido' }, 400);
+  }
+
+  const [income] = await db
+    .select()
+    .from(incomes)
+    .where(
+      and(
+        eq(incomes.id, incomeIdResult.data),
+        eq(incomes.userId, userId),
+        eq(incomes.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!income) {
+    return c.json({ error: 'Ingreso no encontrado' }, 404);
+  }
+
+  return c.json(income);
 });
 
 app.patch(
@@ -283,6 +336,99 @@ app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
     .returning();
 
   return c.json(result[0]);
+});
+
+app.patch(
+  '/api/incomes/:incomeId',
+  zValidator('json', incomeUpdateSchema),
+  async (c) => {
+    const userId = c.get('userId');
+    const incomeId = c.req.param('incomeId');
+    const incomeIdResult = z.string().uuid().safeParse(incomeId);
+    if (!incomeIdResult.success) {
+      return c.json({ error: 'incomeId inválido' }, 400);
+    }
+
+    const body = c.req.valid('json');
+
+    const [existingIncome] = await db
+      .select()
+      .from(incomes)
+      .where(
+        and(
+          eq(incomes.id, incomeIdResult.data),
+          eq(incomes.userId, userId),
+          eq(incomes.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (!existingIncome) {
+      return c.json({ error: 'Ingreso no encontrado' }, 404);
+    }
+
+    if (body.categoryId) {
+      const [category] = await db
+        .select()
+        .from(categories)
+        .where(eq(categories.id, body.categoryId))
+        .limit(1);
+
+      if (!category || category.type !== 'income') {
+        return c.json({ error: 'Categoría de ingreso inválida' }, 400);
+      }
+    }
+
+    const [updatedIncome] = await db
+      .update(incomes)
+      .set({
+        amount: body.amount,
+        categoryId: body.categoryId,
+        note: body.note,
+        date: body.date ? new Date(body.date) : undefined,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(incomes.id, incomeIdResult.data),
+          eq(incomes.userId, userId),
+          eq(incomes.isActive, true),
+        ),
+      )
+      .returning();
+
+    return c.json(updatedIncome);
+  },
+);
+
+app.delete('/api/incomes/:incomeId', async (c) => {
+  const userId = c.get('userId');
+  const incomeId = c.req.param('incomeId');
+  const incomeIdResult = z.string().uuid().safeParse(incomeId);
+  if (!incomeIdResult.success) {
+    return c.json({ error: 'incomeId inválido' }, 400);
+  }
+
+  const result = await db
+    .update(incomes)
+    .set({
+      isActive: false,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(incomes.id, incomeIdResult.data),
+        eq(incomes.userId, userId),
+        eq(incomes.isActive, true),
+      ),
+    )
+    .returning({ id: incomes.id });
+
+  if (result.length === 0) {
+    return c.json({ error: 'Ingreso no encontrado' }, 404);
+  }
+
+  return c.json({ success: true, id: result[0].id });
 });
 
 app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
