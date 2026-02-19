@@ -1,7 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { ChartColumn, House, Plus, ReceiptText } from 'lucide-react';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+import { House, Plus, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { getApiBase, startAuth } from '../lib/openauth';
+
+dayjs.locale('es');
 
 type Board = {
   id: string;
@@ -13,6 +17,8 @@ type Income = {
   amount: string;
   date: string;
   note: string | null;
+  categoryName: string;
+  categoryEmoji: string;
 };
 
 type Expense = {
@@ -20,6 +26,8 @@ type Expense = {
   amount: string;
   date: string;
   note: string | null;
+  categoryName: string;
+  categoryEmoji: string;
 };
 
 type DashboardResponse = {
@@ -34,9 +42,18 @@ type DisplayMovement = {
   type: 'income' | 'expense';
   date: Date;
   note: string | null;
+  categoryName: string;
+  categoryEmoji: string;
 };
 
 type Period = 'week' | 'month' | 'year';
+
+function getMovementDateLabel(date: Date) {
+  const target = dayjs(date);
+  if (target.isSame(dayjs(), 'day')) return 'Hoy';
+  if (target.isSame(dayjs().subtract(1, 'day'), 'day')) return 'Ayer';
+  return target.format('dddd D MMM');
+}
 
 const API_BASE = getApiBase();
 
@@ -66,12 +83,19 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('week');
+  const [view, setView] = useState<'dashboard' | 'profile'>('dashboard');
 
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
     setAnonymousId(window.localStorage.getItem('anonymousId'));
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (anonymousId) {
+      setView('dashboard');
+    }
+  }, [anonymousId]);
 
   useEffect(() => {
     if (!isHydrated || !accessToken || data || loading) {
@@ -135,6 +159,8 @@ function Dashboard() {
       type: 'income' as const,
       date: new Date(income.date),
       note: income.note,
+      categoryName: income.categoryName,
+      categoryEmoji: income.categoryEmoji,
     }));
 
     const mappedExpenses = data.expenses.map((expense) => ({
@@ -143,6 +169,8 @@ function Dashboard() {
       type: 'expense' as const,
       date: new Date(expense.date),
       note: expense.note,
+      categoryName: expense.categoryName,
+      categoryEmoji: expense.categoryEmoji,
     }));
 
     return [...mappedIncomes, ...mappedExpenses].sort(
@@ -190,6 +218,33 @@ function Dashboard() {
       (movement) => movement.date >= startOfWeek && movement.date < endOfWeek,
     );
   }, [movements, period]);
+
+  const groupedMovements = useMemo(() => {
+    type Group = {
+      label: string;
+      date: Date;
+      movements: DisplayMovement[];
+    };
+
+    const grouped: Record<string, Group> = {};
+
+    for (const movement of periodMovements) {
+      const key = movement.date.toDateString();
+      if (grouped[key]) {
+        grouped[key].movements.push(movement);
+      } else {
+        grouped[key] = {
+          label: getMovementDateLabel(movement.date),
+          date: movement.date,
+          movements: [movement],
+        };
+      }
+    }
+
+    return Object.values(grouped)
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .map((group) => [group.label, group.movements] as const);
+  }, [periodMovements]);
 
   const weeklyExpenses = useMemo(() => {
     const now = new Date();
@@ -251,34 +306,6 @@ function Dashboard() {
     return ((currentTotal - previousTotal) / previousTotal) * 100;
   }, [weeklyExpenses]);
 
-  const expenseCategories = useMemo(() => {
-    const grouped = periodMovements
-      .filter((movement) => movement.type === 'expense')
-      .reduce((acc, movement) => {
-        const category = movement.note?.trim() || 'General';
-        const existing = acc.get(category);
-
-        if (existing) {
-          existing.amount += movement.amount;
-          existing.entries += 1;
-          return acc;
-        }
-
-        acc.set(category, {
-          category,
-          amount: movement.amount,
-          entries: 1,
-        });
-
-        return acc;
-      }, new Map<
-        string,
-        { category: string; amount: number; entries: number }
-      >());
-
-    return [...grouped.values()].sort((a, b) => b.amount - a.amount);
-  }, [periodMovements]);
-
   async function continueAsAnonymous() {
     setError(null);
     setLoading(true);
@@ -318,6 +345,7 @@ function Dashboard() {
     setAnonymousId(null);
     setData(null);
     setError(null);
+    setView('dashboard');
   }
 
   if (!isHydrated) {
@@ -375,152 +403,214 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
       <div className="mx-auto w-full max-w-md px-5 pb-28 pt-8">
-        <section className="mb-6">
-          <div className="rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
-              {currencyFormatter.format(weeklyExpenses.currentTotal)}
-            </p>
-            <p className="flex items-center gap-2 text-base text-slate-400">
-              Total spent this week
-              <span
-                className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
-                  weekChange >= 0
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-rose-100 text-rose-700'
-                }`}
-              >
-                {weekChange >= 0 ? '↑' : '↓'} {Math.abs(weekChange).toFixed(0)}%
-              </span>
-            </p>
-
-            <div className="mt-7 grid grid-cols-7 items-end gap-2">
-              {weeklyExpenses.dayTotals.map((amount, index) => (
-                <div key={weeklyExpenses.labels[index]} className="text-center">
-                  <div className="mx-auto mb-2 flex h-28 w-7 items-end overflow-hidden rounded-xl bg-slate-100">
-                    <div
-                      className="w-full rounded-xl bg-slate-900 transition-all duration-300"
-                      style={{
-                        height: `${Math.max(
-                          12,
-                          (amount / weeklyExpenses.highest) * 100,
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs font-medium text-slate-400">
-                    {weeklyExpenses.labels[index]}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
-              {(['week', 'month', 'year'] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    setPeriod(option);
-                  }}
-                  className={`flex-1 rounded-xl px-2 py-2 capitalize transition-colors ${
-                    period === option
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-400'
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <main className="space-y-2 pb-3">
-          {expenseCategories.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
-              No hay gastos en este periodo.
-            </div>
-          )}
-
-          {expenseCategories.map((category) => (
-            <div
-              key={category.category}
-              className="flex items-center justify-between border-b border-slate-200 py-4"
-            >
-              <div className="min-w-0 pr-3">
-                <p className="truncate text-lg font-medium text-slate-800">
-                  {category.category}
+        {view === 'dashboard' && (
+          <>
+            {anonymousId && (
+              <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900 shadow-sm border border-indigo-100">
+                <p className="font-medium">
+                  Sincroniza tus datos iniciando sesión
                 </p>
-                <p className="text-sm text-slate-400">
-                  {category.entries}{' '}
-                  {category.entries === 1 ? 'entry' : 'entries'}
+                <button
+                  type="button"
+                  onClick={loginAndClaim}
+                  disabled={loading}
+                  className="shrink-0 rounded-xl bg-indigo-600 px-3 py-2 font-bold text-white transition-all active:scale-95 disabled:opacity-60"
+                >
+                  Iniciar sesión
+                </button>
+              </div>
+            )}
+
+            <section className="mb-6">
+              <div className="rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+                <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
+                  {currencyFormatter.format(weeklyExpenses.currentTotal)}
+                </p>
+                <p className="flex items-center gap-2 text-base text-slate-400">
+                  Total spent this week
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
+                      weekChange >= 0
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-rose-100 text-rose-700'
+                    }`}
+                  >
+                    {weekChange >= 0 ? '↑' : '↓'}{' '}
+                    {Math.abs(weekChange).toFixed(0)}%
+                  </span>
+                </p>
+
+                <div className="mt-7 grid grid-cols-7 items-end gap-2">
+                  {weeklyExpenses.dayTotals.map((amount, index) => (
+                    <div
+                      key={weeklyExpenses.labels[index]}
+                      className="text-center"
+                    >
+                      <div className="mx-auto mb-2 flex h-28 w-7 items-end overflow-hidden rounded-xl bg-slate-100">
+                        <div
+                          className="w-full rounded-xl bg-slate-900 transition-all duration-300"
+                          style={{
+                            height: `${Math.max(
+                              12,
+                              (amount / weeklyExpenses.highest) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs font-medium text-slate-400">
+                        {weeklyExpenses.labels[index]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
+                  {(['week', 'month', 'year'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        setPeriod(option);
+                      }}
+                      className={`flex-1 rounded-xl px-2 py-2 capitalize transition-colors ${
+                        period === option
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <main className="pb-3">
+              {groupedMovements.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-500">
+                  No hay movimientos en este periodo.
+                </div>
+              ) : (
+                groupedMovements.map(([label, groupMovements]) => (
+                  <section key={label} className="mt-6">
+                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      {label}
+                    </p>
+                    <div className="space-y-3 rounded-3xl border border-slate-200 bg-white px-4 py-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                      {groupMovements.map((movement) => (
+                        <div
+                          key={movement.id}
+                          className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+                              {movement.categoryEmoji}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-900">
+                                {movement.categoryName}
+                              </p>
+                              {movement.note && (
+                                <p className="truncate text-xs text-slate-500">
+                                  {movement.note}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <p
+                            className={`text-sm font-semibold whitespace-nowrap ${
+                              movement.type === 'income'
+                                ? 'text-emerald-600'
+                                : 'text-slate-900'
+                            }`}
+                          >
+                            {currencyFormatter.format(movement.amount)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
+            </main>
+
+            {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+          </>
+        )}
+
+        {view === 'profile' && !anonymousId && (
+          <section className="rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+            <div className="space-y-6">
+              <div>
+                <p className="text-3xl font-semibold tracking-tight text-slate-950">
+                  Perfil
+                </p>
+                <p className="text-sm text-slate-500">
+                  Administra tu cuenta y cierra sesión cuando lo necesites.
                 </p>
               </div>
-              <p className="text-xl font-semibold text-slate-900">
-                {currencyFormatter.format(category.amount)}
-              </p>
+              <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm text-slate-500">
+                  Si necesitas proteger tu dispositivo o cerrar sesión remota,
+                  usa el botón de abajo.
+                </p>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-all active:scale-95"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
             </div>
-          ))}
-        </main>
-
-        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-
-        <button
-          type="button"
-          onClick={logout}
-          className="mt-4 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
-        >
-          Cerrar sesion
-        </button>
-
-        {anonymousId && (
-          <button
-            type="button"
-            onClick={loginAndClaim}
-            disabled={loading}
-            className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            Iniciar sesion para sincronizar
-          </button>
+            {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
+          </section>
         )}
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-4 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-md items-center justify-between">
+      <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-6 backdrop-blur">
+        <div className="mx-auto grid w-full max-w-md grid-cols-3 items-center">
           <button
             type="button"
-            className="rounded-2xl p-2 text-slate-400"
-            aria-label="Dashboard"
+            onClick={() => setView('dashboard')}
+            className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
+              view === 'dashboard'
+                ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                : 'border-transparent text-slate-400 hover:bg-slate-50'
+            }`}
+            aria-label="Ir al dashboard"
           >
             <House className="h-6 w-6" />
           </button>
 
-          <Link
-            to="/add"
-            search={(current) => current}
-            params={(current) => current}
-            className="rounded-2xl bg-slate-900 p-3 text-white"
-            aria-label="Agregar movimiento"
-          >
-            <Plus className="h-5 w-5" strokeWidth={3} />
-          </Link>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-2xl p-2 text-slate-400"
-              aria-label="Resumen"
+          <div className="flex items-center justify-center">
+            <Link
+              to="/add"
+              search={(current) => current}
+              params={(current) => current}
+              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg transition-all active:scale-95"
+              aria-label="Agregar movimiento"
             >
-              <ChartColumn className="h-6 w-6" />
-            </button>
-            <button
-              type="button"
-              className="rounded-2xl p-2 text-slate-400"
-              aria-label="Movimientos"
-            >
-              <ReceiptText className="h-6 w-6" />
-            </button>
+              <Plus className="h-7 w-7" strokeWidth={3} />
+            </Link>
           </div>
+
+          {anonymousId ? (
+            <div className="h-12 w-12" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setView('profile')}
+              className={`justify-self-end flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
+                view === 'profile'
+                  ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                  : 'border-transparent text-slate-400 hover:bg-slate-50'
+              }`}
+              aria-label="Ver perfil"
+            >
+              <User className="h-6 w-6" />
+            </button>
+          )}
         </div>
       </nav>
     </div>

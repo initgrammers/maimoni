@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
 import {
   Calendar as CalendarIcon,
   Camera,
@@ -55,6 +55,8 @@ interface ScanResponse {
   note: string;
   items: Array<{ name: string; price: number }>;
 }
+
+dayjs.locale('es');
 
 function AddMovement() {
   const navigate = useNavigate();
@@ -224,7 +226,7 @@ function AddMovement() {
           amount,
           categoryId: selectedSubcategory?.id || selectedCategory.id,
           note: note || undefined,
-          date: new Date(date).toISOString(),
+          date: new Date(`${date}T12:00:00`).toISOString(),
         }),
       });
 
@@ -345,9 +347,7 @@ function AddMovement() {
                 >
                   <span className="font-medium">
                     {date
-                      ? format(new Date(`${date}T12:00:00`), 'PPP', {
-                          locale: es,
-                        })
+                      ? dayjs(`${date}T12:00:00`).format('D MMM YYYY')
                       : 'Seleccionar fecha'}
                   </span>
                   <CalendarIcon className="h-5 w-5 text-slate-400" />
@@ -396,7 +396,6 @@ function AddMovement() {
                     }}
                     month={month}
                     onMonthChange={setMonth}
-                    locale={es}
                     className="w-full max-w-[350px]"
                   />
                 </div>

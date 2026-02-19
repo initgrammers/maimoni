@@ -1,134 +1,154 @@
+import dayjs, { type Dayjs } from 'dayjs';
+import localeData from 'dayjs/plugin/localeData';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type * as React from 'react';
-import { DayPicker } from 'react-day-picker';
 
 import { cn } from '@/lib/utils';
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+dayjs.extend(localeData);
+
+export interface CalendarProps {
+  mode?: 'single';
+  selected?: Date;
+  onSelect?: (date: Date | undefined) => void;
+  month?: Date;
+  onMonthChange?: (date: Date) => void;
+  className?: string;
+}
+
+const WEEK_COUNT = 6;
+const WEEK_LENGTH = 7;
+
+function formatWeekday(label: string) {
+  const trimmed = label.slice(0, 2);
+  if (trimmed.length === 0) return '';
+  if (trimmed.length === 1) return trimmed.toUpperCase();
+  return `${trimmed[0].toUpperCase()}${trimmed[1].toLowerCase()}`;
+}
 
 function Calendar({
   className,
-  classNames,
-  showOutsideDays = true,
-  ...props
+  mode = 'single',
+  selected,
+  onSelect,
+  month,
+  onMonthChange,
 }: CalendarProps) {
+  const localeData = dayjs.localeData();
+  const firstDayOfWeek = localeData.firstDayOfWeek();
+  const currentMonth = dayjs(month ?? selected ?? new Date());
+  const startOfMonth = currentMonth.startOf('month');
+  const offset =
+    (startOfMonth.day() - firstDayOfWeek + WEEK_LENGTH) % WEEK_LENGTH;
+  const gridStart = startOfMonth.subtract(offset, 'day');
+
+  const weeks: Dayjs[][] = [];
+  for (let weekIndex = 0; weekIndex < WEEK_COUNT; weekIndex += 1) {
+    const week: Dayjs[] = [];
+    for (let dayIndex = 0; dayIndex < WEEK_LENGTH; dayIndex += 1) {
+      week.push(gridStart.add(weekIndex * WEEK_LENGTH + dayIndex, 'day'));
+    }
+    weeks.push(week);
+  }
+
+  const weekdays = localeData.weekdaysShort();
+  const orderedWeekdays = [
+    ...weekdays.slice(firstDayOfWeek),
+    ...weekdays.slice(0, firstDayOfWeek),
+  ];
+
+  const today = dayjs();
+  const selectedDay = selected ? dayjs(selected) : null;
+
+  const handleMonthChange = (direction: 'prev' | 'next') => {
+    const nextMonth =
+      direction === 'prev'
+        ? currentMonth.subtract(1, 'month')
+        : currentMonth.add(1, 'month');
+    onMonthChange?.(nextMonth.toDate());
+  };
+
+  const handleDayClick = (day: Dayjs) => {
+    onSelect?.(day.toDate());
+  };
+
   return (
-    <div className="rdp-container">
-      <style>{`
-        .rdp-container .rdp-month_grid {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        .rdp-container .rdp-weekdays {
-          display: flex;
-          justify-content: space-between;
-        }
-        .rdp-container .rdp-week {
-          display: flex;
-          justify-content: space-between;
-          width: 100%;
-          margin-top: 0.5rem;
-        }
-        .rdp-container .rdp-day {
-          width: 2.75rem;
-          height: 2.75rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .rdp-container .rdp-caption_label {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .rdp-container .rdp-dropdowns {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-        }
-        .rdp-container .rdp-dropdown_root {
-          position: relative;
-          display: inline-flex;
-          align-items: center;
-        }
-        .rdp-container .rdp-dropdown {
-          appearance: none;
-          background: #f1f5f9;
-          border: none;
-          border-radius: 12px;
-          padding: 8px 12px;
-          font-size: 1rem;
-          font-weight: 700;
-          color: #0f172a;
-          cursor: pointer;
-          transition: all 0.2s;
-          text-align: center;
-          min-width: 80px;
-        }
-        .rdp-container .rdp-dropdown:hover {
-          background: #e2e8f0;
-        }
-        .rdp-container .rdp-dropdown:active {
-          transform: scale(0.95);
-        }
-      `}</style>
-      <DayPicker
-        showOutsideDays={showOutsideDays}
-        className={cn('p-6', className)}
-        captionLayout="dropdown"
-        startMonth={new Date(2020, 0)}
-        endMonth={new Date(2035, 11)}
-        classNames={{
-          months:
-            'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
-          month: 'space-y-4',
-          month_caption: 'flex justify-center pt-1 relative items-center mb-8',
-          caption_label: 'hidden', // Hide the static label when dropdowns are active
-          dropdowns: 'rdp-dropdowns',
-          dropdown_root: 'rdp-dropdown_root',
-          dropdown: 'rdp-dropdown',
-          nav: 'space-x-1 flex items-center',
-          button_previous: cn(
-            'h-12 w-12 bg-white border border-slate-200 flex items-center justify-center rounded-2xl opacity-90 hover:opacity-100 transition-all active:scale-95 shadow-sm absolute left-1 z-10',
-          ),
-          button_next: cn(
-            'h-12 w-12 bg-white border border-slate-200 flex items-center justify-center rounded-2xl opacity-90 hover:opacity-100 transition-all active:scale-95 shadow-sm absolute right-1 z-10',
-          ),
-          month_grid: 'rdp-month_grid',
-          weekdays: 'rdp-weekdays',
-          weekday:
-            'text-slate-400 rounded-md w-11 font-bold text-[0.7rem] uppercase tracking-widest text-center',
-          week: 'rdp-week',
-          day: cn(
-            'rdp-day font-semibold aria-selected:opacity-100 rounded-2xl hover:bg-slate-100 transition-all active:scale-90 relative',
-          ),
-          day_button: 'h-full w-full flex items-center justify-center',
-          range_end: 'day-range-end',
-          selected:
-            'bg-slate-900 text-white hover:bg-slate-900 hover:text-white focus:bg-slate-900 focus:text-white shadow-lg shadow-slate-200',
-          today:
-            'bg-slate-100 text-slate-900 font-bold border border-slate-200',
-          outside:
-            'day-outside text-slate-300 opacity-50 aria-selected:bg-slate-100/50 aria-selected:text-slate-300 aria-selected:opacity-30',
-          disabled: 'text-slate-300 opacity-50',
-          range_middle:
-            'aria-selected:bg-slate-100 aria-selected:text-slate-900',
-          hidden: 'invisible',
-          ...classNames,
-        }}
-        components={{
-          Chevron: (props) => {
-            if (props.orientation === 'left') {
-              return <ChevronLeft className="h-6 w-6 text-slate-600" />;
-            }
-            return <ChevronRight className="h-6 w-6 text-slate-600" />;
-          },
-        }}
-        {...props}
-      />
+    <div
+      className={cn(
+        'rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_12px_30px_rgba(15,23,42,0.04)]',
+        className,
+      )}
+      data-calendar-mode={mode}
+    >
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-lg font-semibold capitalize text-slate-900">
+          {currentMonth.format('MMMM YYYY')}
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => handleMonthChange('prev')}
+            className="h-11 w-11 rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+          >
+            <ChevronLeft className="mx-auto h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMonthChange('next')}
+            className="h-11 w-11 rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+          >
+            <ChevronRight className="mx-auto h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-center text-slate-400">
+        {orderedWeekdays.map((weekday) => (
+          <span key={weekday}>{formatWeekday(weekday)}</span>
+        ))}
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {weeks.map((week) => {
+          const weekKey = week[0].format('YYYY-MM-DD');
+
+          return (
+            <div key={weekKey} className="grid grid-cols-7 gap-2">
+              {week.map((day) => {
+                const isOutsideMonth = day.month() !== currentMonth.month();
+                const isToday = day.isSame(today, 'day');
+                const isSelected = selectedDay?.isSame(day, 'day');
+
+                return (
+                  <button
+                    key={day.format('YYYY-MM-DD')}
+                    type="button"
+                    onClick={() => handleDayClick(day)}
+                    className={cn(
+                      'h-12 w-12 rounded-2xl text-sm font-semibold transition-all duration-150',
+                      'flex items-center justify-center border',
+                      isSelected
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                        : 'border-transparent text-slate-900 hover:border-slate-200 hover:bg-slate-50',
+                      isOutsideMonth && !isSelected
+                        ? 'text-slate-300 opacity-70 hover:bg-slate-100 hover:border-slate-100'
+                        : '',
+                      isToday && !isSelected
+                        ? 'border-slate-200 bg-slate-100'
+                        : '',
+                    )}
+                  >
+                    {day.date()}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
 Calendar.displayName = 'Calendar';
 
 export { Calendar };

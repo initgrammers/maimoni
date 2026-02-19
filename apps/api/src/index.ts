@@ -87,19 +87,45 @@ app.get('/api/dashboard', async (c) => {
 
   const [incomeRows, expenseRows] = await Promise.all([
     db
-      .select()
+      .select({
+        income: incomes,
+        categoryName: categories.name,
+        categoryEmoji: categories.emoji,
+      })
       .from(incomes)
+      .innerJoin(categories, eq(incomes.categoryId, categories.id))
       .where(and(eq(incomes.userId, userId), eq(incomes.boardId, board.id))),
     db
-      .select()
+      .select({
+        expense: expenses,
+        categoryName: categories.name,
+        categoryEmoji: categories.emoji,
+      })
       .from(expenses)
+      .innerJoin(categories, eq(expenses.categoryId, categories.id))
       .where(and(eq(expenses.userId, userId), eq(expenses.boardId, board.id))),
   ]);
 
+  const incomesWithCategory = incomeRows.map(
+    ({ income, categoryName, categoryEmoji }) => ({
+      ...income,
+      categoryName,
+      categoryEmoji,
+    }),
+  );
+
+  const expensesWithCategory = expenseRows.map(
+    ({ expense, categoryName, categoryEmoji }) => ({
+      ...expense,
+      categoryName,
+      categoryEmoji,
+    }),
+  );
+
   return c.json({
     board,
-    incomes: incomeRows,
-    expenses: expenseRows,
+    incomes: incomesWithCategory,
+    expenses: expensesWithCategory,
   });
 });
 
