@@ -106,13 +106,7 @@ function AddMovement() {
   const dateInputId = useId();
   const noteInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [accessToken] = useState<string | null>(() => {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    return window.localStorage.getItem('accessToken');
-  });
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => {
     const now = new Date();
@@ -126,6 +120,10 @@ function AddMovement() {
   useEffect(() => {
     setMonth(new Date(`${date}T12:00:00`));
   }, [date]);
+
+  useEffect(() => {
+    setAccessToken(window.localStorage.getItem('accessToken'));
+  }, []);
 
   const [type, setType] = useState<MovementType>('expense');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(

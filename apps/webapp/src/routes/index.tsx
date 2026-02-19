@@ -226,30 +226,12 @@ function DashboardLoading({
 
 function Dashboard() {
   const queryClient = useQueryClient();
-  const isHydrated = typeof window !== 'undefined';
-  const [accessToken, setAccessToken] = useState<string | null>(() => {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    return window.localStorage.getItem('accessToken');
-  });
-  const [anonymousId, setAnonymousId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    return window.localStorage.getItem('anonymousId');
-  });
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [anonymousId, setAnonymousId] = useState<string | null>(null);
   const [pendingClaimAnonymousId, setPendingClaimAnonymousId] = useState<
     string | null
-  >(() => {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    return window.localStorage.getItem('pendingClaimAnonymousId');
-  });
+  >(null);
   const [claimRequestKey, setClaimRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -258,6 +240,15 @@ function Dashboard() {
   const [spendingLimitInput, setSpendingLimitInput] = useState('');
   const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAccessToken(window.localStorage.getItem('accessToken'));
+    setAnonymousId(window.localStorage.getItem('anonymousId'));
+    setPendingClaimAnonymousId(
+      window.localStorage.getItem('pendingClaimAnonymousId'),
+    );
+    setIsHydrated(true);
+  }, []);
 
   const claimMutation = useMutation<
     void,
