@@ -25,8 +25,8 @@ import { requireClientAuth } from '../lib/route-guards';
 import type { Category, MovementType, Subcategory } from '../types';
 
 const API_BASE = getApiBase();
-const dashboardQueryKey = (accessToken: string) =>
-  ['dashboard', accessToken] as const;
+const dashboardQueryKey = (accessToken: string, boardId?: string | null) =>
+  ['dashboard', accessToken, boardId ?? 'default'] as const;
 const categoriesQueryKey = (accessToken: string, type: MovementType) =>
   ['categories', accessToken, type] as const;
 const INCOME_PAGE_TITLE = 'Nuevo ingreso';
@@ -60,7 +60,13 @@ async function fetchCategories(accessToken: string, type: MovementType) {
 }
 
 async function fetchDashboard(accessToken: string) {
-  const response = await fetch(`${API_BASE}/api/dashboard`, {
+  const activeBoardId = window.localStorage.getItem('activeBoardId');
+  const url = new URL(`${API_BASE}/api/dashboard`);
+  if (activeBoardId) {
+    url.searchParams.set('boardId', activeBoardId);
+  }
+
+  const response = await fetch(url.toString(), {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
@@ -192,7 +198,10 @@ function AddIncome() {
       }
 
       const dashboard = await queryClient.fetchQuery({
-        queryKey: dashboardQueryKey(accessToken),
+        queryKey: dashboardQueryKey(
+          accessToken,
+          window.localStorage.getItem('activeBoardId'),
+        ),
         queryFn: () => fetchDashboard(accessToken),
       });
 
@@ -221,7 +230,10 @@ function AddIncome() {
     onSuccess: async () => {
       if (accessToken) {
         await queryClient.invalidateQueries({
-          queryKey: dashboardQueryKey(accessToken),
+          queryKey: dashboardQueryKey(
+            accessToken,
+            window.localStorage.getItem('activeBoardId'),
+          ),
         });
       }
 

@@ -109,7 +109,10 @@ export async function claimAnonymousData(
 
     await client
       .update(invitations)
-      .set({ invitedAnonymousId: null, updatedAt: new Date() })
+      .set({
+        invitedAnonymousId: null,
+        updatedAt: new Date(),
+      })
       .where(eq(invitations.invitedAnonymousId, anonymousId));
 
     await client.delete(users).where(eq(users.id, anonymousId));

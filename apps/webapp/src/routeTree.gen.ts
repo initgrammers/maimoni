@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
@@ -16,6 +17,11 @@ import { Route as AddIncomeRouteImport } from './routes/add.income'
 import { Route as IncomesIncomeIdEditRouteImport } from './routes/incomes.$incomeId.edit'
 import { Route as ExpensesExpenseIdEditRouteImport } from './routes/expenses.$expenseId.edit'
 
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AddRoute = AddRouteImport.update({
   id: '/add',
   path: '/add',
@@ -50,6 +56,7 @@ const ExpensesExpenseIdEditRoute = ExpensesExpenseIdEditRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRouteWithChildren
+  '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRouteWithChildren
+  '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRouteWithChildren
+  '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/add'
+    | '/invite'
     | '/add/income'
     | '/auth/callback'
     | '/expenses/$expenseId/edit'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/add'
+    | '/invite'
     | '/add/income'
     | '/auth/callback'
     | '/expenses/$expenseId/edit'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/add'
+    | '/invite'
     | '/add/income'
     | '/auth/callback'
     | '/expenses/$expenseId/edit'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRouteWithChildren
+  InviteRoute: typeof InviteRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ExpensesExpenseIdEditRoute: typeof ExpensesExpenseIdEditRoute
   IncomesIncomeIdEditRoute: typeof IncomesIncomeIdEditRoute
@@ -109,6 +122,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/add': {
       id: '/add'
       path: '/add'
@@ -167,6 +187,7 @@ const AddRouteWithChildren = AddRoute._addFileChildren(AddRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRouteWithChildren,
+  InviteRoute: InviteRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ExpensesExpenseIdEditRoute: ExpensesExpenseIdEditRoute,
   IncomesIncomeIdEditRoute: IncomesIncomeIdEditRoute,

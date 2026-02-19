@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { zValidator } from '@hono/zod-validator';
 import type { CategoryInput } from '@maimoni/ai';
 import { extractReceiptInfo } from '@maimoni/ai';
@@ -8,6 +9,7 @@ import {
   normalizeAuthIssuer,
 } from '@maimoni/auth';
 import {
+  boardMembers,
   boards,
   categories,
   claimAnonymousData,
@@ -15,9 +17,11 @@ import {
   expenses,
   getOrCreateInitialBoard,
   incomes,
+  invitations,
   syncUser,
+  users,
 } from '@maimoni/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { handle } from 'hono/aws-lambda';
 import { z } from 'zod';
@@ -42,6 +46,247 @@ function getBearerToken(authorization: string | undefined) {
 
   return authorization.slice('Bearer '.length);
 }
+
+type BoardAccessRole = 'owner' | 'editor' | 'viewer';
+
+function createInviteToken() {
+  return randomBytes(32).toString('base64url');
+}
+
+function hashInviteToken(token: string) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function isMissingColumnError(error: unknown) {
+  const queue: unknown[] = [error];
+  const visited = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== 'object' || visited.has(current)) {
+      continue;
+    }
+
+    visited.add(current);
+
+    const candidate = current as {
+      code?: string;
+      message?: string;
+      stack?: string;
+      cause?: unknown;
+    };
+
+    const combinedText =
+      `${candidate.message ?? ''}\n${candidate.stack ?? ''}\n${String(candidate)}`.toLowerCase();
+
+    if (
+      candidate.code === '42703' ||
+      combinedText.includes('42703') ||
+      combinedText.includes('does not exist')
+    ) {
+      return true;
+    }
+
+    if ('cause' in candidate) {
+      queue.push(candidate.cause);
+    }
+
+    for (const key of Object.getOwnPropertyNames(candidate)) {
+      const descriptor = Object.getOwnPropertyDescriptor(candidate, key);
+      if (!descriptor || !('value' in descriptor)) {
+        continue;
+      }
+
+      const value = descriptor.value;
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      }
+    }
+  }
+
+  return false;
+}
+
+async function ensureInvitationsSchemaIsReady() {
+  try {
+    await db
+      .select({
+        id: invitations.id,
+        invitedByUserId: invitations.invitedByUserId,
+        inviteTokenHash: invitations.inviteTokenHash,
+      })
+      .from(invitations)
+      .limit(1);
+
+    return null;
+  } catch (error) {
+    if (isMissingColumnError(error)) {
+      return 'Invitaciones no disponibles: falta aplicar la migración 0004_invitation_membership_upgrade.sql';
+    }
+
+    const errorText =
+      error instanceof Error
+        ? `${error.message}\n${error.stack ?? ''}`.toLowerCase()
+        : '';
+    if (
+      errorText.includes('failed query') &&
+      errorText.includes('invitations')
+    ) {
+      return 'Invitaciones temporalmente no disponibles en este entorno';
+    }
+
+    return 'Invitaciones temporalmente no disponibles en este entorno';
+  }
+}
+
+async function getUserBoardRole(userId: string, boardId: string) {
+  const [board] = await db
+    .select()
+    .from(boards)
+    .where(and(eq(boards.id, boardId), eq(boards.isActive, true)))
+    .limit(1);
+
+  if (!board) {
+    return null;
+  }
+
+  if (board.ownerId === userId) {
+    return { board, role: 'owner' as BoardAccessRole };
+  }
+
+  const [membership] = await db
+    .select()
+    .from(boardMembers)
+    .where(
+      and(
+        eq(boardMembers.boardId, boardId),
+        eq(boardMembers.userId, userId),
+        eq(boardMembers.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    return null;
+  }
+
+  return { board, role: 'editor' as BoardAccessRole };
+}
+
+async function getOrSelectAccessibleBoard(
+  userId: string,
+  requestedBoardId?: string,
+) {
+  if (requestedBoardId) {
+    const access = await getUserBoardRole(userId, requestedBoardId);
+    if (!access) {
+      return null;
+    }
+
+    return access;
+  }
+
+  const [ownedBoard] = await db
+    .select()
+    .from(boards)
+    .where(and(eq(boards.ownerId, userId), eq(boards.isActive, true)))
+    .limit(1);
+
+  if (ownedBoard) {
+    return { board: ownedBoard, role: 'owner' as BoardAccessRole };
+  }
+
+  const [membership] = await db
+    .select()
+    .from(boardMembers)
+    .where(
+      and(eq(boardMembers.userId, userId), eq(boardMembers.isActive, true)),
+    )
+    .limit(1);
+
+  if (membership) {
+    const access = await getUserBoardRole(userId, membership.boardId);
+    if (access) {
+      return access;
+    }
+  }
+
+  const board = await getOrCreateInitialBoard(db, { userId });
+  return { board, role: 'owner' as BoardAccessRole };
+}
+
+async function listUserBoards(userId: string) {
+  const [ownedBoards, memberships] = await Promise.all([
+    db
+      .select({
+        id: boards.id,
+        name: boards.name,
+      })
+      .from(boards)
+      .where(and(eq(boards.ownerId, userId), eq(boards.isActive, true))),
+    db
+      .select({
+        boardId: boardMembers.boardId,
+      })
+      .from(boardMembers)
+      .where(
+        and(eq(boardMembers.userId, userId), eq(boardMembers.isActive, true)),
+      ),
+  ]);
+
+  const membershipBoardIds = memberships.map(
+    (membership) => membership.boardId,
+  );
+  const membershipBoards =
+    membershipBoardIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: boards.id,
+            name: boards.name,
+          })
+          .from(boards)
+          .where(
+            and(
+              eq(boards.isActive, true),
+              or(
+                ...membershipBoardIds.map((boardId) => eq(boards.id, boardId)),
+              ),
+            ),
+          );
+
+  const results: Array<{ id: string; name: string; role: BoardAccessRole }> =
+    [];
+
+  for (const board of ownedBoards) {
+    results.push({ id: board.id, name: board.name, role: 'owner' });
+  }
+
+  for (const board of membershipBoards) {
+    if (results.some((item) => item.id === board.id)) {
+      continue;
+    }
+
+    results.push({ id: board.id, name: board.name, role: 'editor' });
+  }
+
+  return results;
+}
+
+const createInvitationSchema = z.object({
+  targetRole: z.enum(['editor', 'viewer']).default('editor'),
+  phoneNumber: z.string().min(4).optional(),
+  ttlHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .optional(),
+});
+
+const invitationActionSchema = z.object({
+  token: z.string().min(20),
+});
 
 app.use('/api/*', async (c, next) => {
   const token = getBearerToken(c.req.header('authorization'));
@@ -84,7 +329,14 @@ app.use('/api/*', async (c, next) => {
 
 app.get('/api/dashboard', async (c) => {
   const userId = c.get('userId');
-  const board = await getOrCreateInitialBoard(db, { userId });
+  const requestedBoardId = c.req.query('boardId');
+  const access = await getOrSelectAccessibleBoard(userId, requestedBoardId);
+
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+  }
+
+  const { board, role } = access;
 
   const [incomeRows, expenseRows] = await Promise.all([
     db
@@ -95,13 +347,7 @@ app.get('/api/dashboard', async (c) => {
       })
       .from(incomes)
       .innerJoin(categories, eq(incomes.categoryId, categories.id))
-      .where(
-        and(
-          eq(incomes.userId, userId),
-          eq(incomes.boardId, board.id),
-          eq(incomes.isActive, true),
-        ),
-      ),
+      .where(and(eq(incomes.boardId, board.id), eq(incomes.isActive, true))),
     db
       .select({
         expense: expenses,
@@ -110,13 +356,7 @@ app.get('/api/dashboard', async (c) => {
       })
       .from(expenses)
       .innerJoin(categories, eq(expenses.categoryId, categories.id))
-      .where(
-        and(
-          eq(expenses.userId, userId),
-          eq(expenses.boardId, board.id),
-          eq(expenses.isActive, true),
-        ),
-      ),
+      .where(and(eq(expenses.boardId, board.id), eq(expenses.isActive, true))),
   ]);
 
   const incomesWithCategory = incomeRows.map(
@@ -137,6 +377,8 @@ app.get('/api/dashboard', async (c) => {
 
   return c.json({
     board,
+    role,
+    boards: await listUserBoards(userId),
     incomes: incomesWithCategory,
     expenses: expensesWithCategory,
   });
@@ -166,6 +408,383 @@ app.post('/api/auth/claim', async (c) => {
     );
   }
 });
+
+app.post(
+  '/api/boards/:boardId/invitations',
+  zValidator('json', createInvitationSchema),
+  async (c) => {
+    const invitationSchemaError = await ensureInvitationsSchemaIsReady();
+    if (invitationSchemaError) {
+      return c.json({ error: invitationSchemaError }, 503);
+    }
+
+    const userId = c.get('userId');
+    const boardId = c.req.param('boardId');
+    const boardIdResult = z.string().uuid().safeParse(boardId);
+    if (!boardIdResult.success) {
+      return c.json({ error: 'boardId inválido' }, 400);
+    }
+
+    const access = await getUserBoardRole(userId, boardIdResult.data);
+    if (!access) {
+      return c.json({ error: 'Tablero no encontrado' }, 404);
+    }
+    if (access.role === 'viewer') {
+      return c.json(
+        { error: 'No tienes permisos para invitar en este tablero' },
+        403,
+      );
+    }
+
+    const body = c.req.valid('json');
+    const inviteToken = createInviteToken();
+    const inviteTokenHash = hashInviteToken(inviteToken);
+    const now = new Date();
+    const expiresAt = new Date(
+      now.getTime() + (body.ttlHours ?? 24 * 7) * 60 * 60 * 1000,
+    );
+
+    const [invitation] = await db
+      .insert(invitations)
+      .values({
+        boardId: boardIdResult.data,
+        invitedByUserId: userId,
+        invitedPhoneNumber: body.phoneNumber,
+        inviteTokenHash,
+        targetRole: body.targetRole,
+        status: 'pending',
+        expiresAt,
+        isActive: true,
+      })
+      .returning();
+
+    return c.json({
+      invitation,
+      inviteToken,
+    });
+  },
+);
+
+app.get('/api/boards/:boardId/invitations', async (c) => {
+  const invitationSchemaError = await ensureInvitationsSchemaIsReady();
+  if (invitationSchemaError) {
+    return c.json({ error: invitationSchemaError }, 503);
+  }
+
+  const userId = c.get('userId');
+  const boardId = c.req.param('boardId');
+  const status = c.req.query('status');
+  const boardIdResult = z.string().uuid().safeParse(boardId);
+  if (!boardIdResult.success) {
+    return c.json({ error: 'boardId inválido' }, 400);
+  }
+
+  const access = await getUserBoardRole(userId, boardIdResult.data);
+  if (!access) {
+    return c.json({ error: 'Tablero no encontrado' }, 404);
+  }
+
+  const baseWhere = and(
+    eq(invitations.boardId, boardIdResult.data),
+    eq(invitations.isActive, true),
+  );
+
+  const rows = await db
+    .select({
+      invitation: invitations,
+      inviterName: users.name,
+      inviterPhone: users.phoneNumber,
+    })
+    .from(invitations)
+    .leftJoin(users, eq(invitations.invitedByUserId, users.id))
+    .where(status ? and(baseWhere, eq(invitations.status, status)) : baseWhere);
+
+  return c.json(
+    rows.map(({ invitation, inviterName, inviterPhone }) => ({
+      ...invitation,
+      inviterName,
+      inviterPhone,
+    })),
+  );
+});
+
+app.post('/api/invitations/:invitationId/revoke', async (c) => {
+  const invitationSchemaError = await ensureInvitationsSchemaIsReady();
+  if (invitationSchemaError) {
+    return c.json({ error: invitationSchemaError }, 503);
+  }
+
+  const userId = c.get('userId');
+  const invitationId = c.req.param('invitationId');
+  const invitationIdResult = z.string().uuid().safeParse(invitationId);
+  if (!invitationIdResult.success) {
+    return c.json({ error: 'invitationId inválido' }, 400);
+  }
+
+  const [invitation] = await db
+    .select()
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.id, invitationIdResult.data),
+        eq(invitations.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!invitation) {
+    return c.json({ error: 'Invitación no encontrada' }, 404);
+  }
+
+  const access = await getUserBoardRole(userId, invitation.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a esta invitación' }, 403);
+  }
+  if (access.role === 'viewer') {
+    return c.json(
+      { error: 'No tienes permisos para revocar invitaciones' },
+      403,
+    );
+  }
+
+  if (invitation.status !== 'pending') {
+    return c.json(
+      { error: 'Solo se pueden revocar invitaciones pendientes' },
+      400,
+    );
+  }
+
+  const [updated] = await db
+    .update(invitations)
+    .set({
+      status: 'revoked',
+      revokedAt: new Date(),
+      updatedAt: new Date(),
+      isActive: false,
+    })
+    .where(eq(invitations.id, invitation.id))
+    .returning();
+
+  return c.json({ invitation: updated });
+});
+
+app.get('/api/invitations/resolve', async (c) => {
+  const invitationSchemaError = await ensureInvitationsSchemaIsReady();
+  if (invitationSchemaError) {
+    return c.json({ error: invitationSchemaError }, 503);
+  }
+
+  const token = c.req.query('token');
+  if (!token) {
+    return c.json({ error: 'token es requerido' }, 400);
+  }
+
+  const tokenHash = hashInviteToken(token);
+  const [resolved] = await db
+    .select({
+      invitation: invitations,
+      boardName: boards.name,
+      inviterName: users.name,
+    })
+    .from(invitations)
+    .innerJoin(boards, eq(invitations.boardId, boards.id))
+    .leftJoin(users, eq(invitations.invitedByUserId, users.id))
+    .where(
+      and(
+        eq(invitations.inviteTokenHash, tokenHash),
+        eq(invitations.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!resolved) {
+    return c.json({ error: 'Invitación no encontrada' }, 404);
+  }
+
+  let status = resolved.invitation.status;
+  const now = new Date();
+  if (
+    status === 'pending' &&
+    resolved.invitation.expiresAt &&
+    resolved.invitation.expiresAt <= now
+  ) {
+    const [expiredInvitation] = await db
+      .update(invitations)
+      .set({
+        status: 'expired',
+        isActive: false,
+        updatedAt: now,
+      })
+      .where(eq(invitations.id, resolved.invitation.id))
+      .returning();
+    status = expiredInvitation?.status ?? 'expired';
+  }
+
+  return c.json({
+    invitationId: resolved.invitation.id,
+    boardId: resolved.invitation.boardId,
+    boardName: resolved.boardName,
+    targetRole: resolved.invitation.targetRole,
+    status,
+    expiresAt: resolved.invitation.expiresAt,
+    inviterName: resolved.inviterName,
+  });
+});
+
+app.post(
+  '/api/invitations/accept',
+  zValidator('json', invitationActionSchema),
+  async (c) => {
+    const invitationSchemaError = await ensureInvitationsSchemaIsReady();
+    if (invitationSchemaError) {
+      return c.json({ error: invitationSchemaError }, 503);
+    }
+
+    const userId = c.get('userId');
+    const body = c.req.valid('json');
+    const tokenHash = hashInviteToken(body.token);
+
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.inviteTokenHash, tokenHash),
+          eq(invitations.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (!invitation) {
+      return c.json({ error: 'Invitación no encontrada' }, 404);
+    }
+
+    if (invitation.status !== 'pending') {
+      return c.json({ error: 'Esta invitación ya no está disponible' }, 400);
+    }
+
+    if (invitation.expiresAt && invitation.expiresAt <= new Date()) {
+      await db
+        .update(invitations)
+        .set({
+          status: 'expired',
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(invitations.id, invitation.id));
+      return c.json({ error: 'Esta invitación expiró' }, 400);
+    }
+
+    const [board] = await db
+      .select()
+      .from(boards)
+      .where(and(eq(boards.id, invitation.boardId), eq(boards.isActive, true)))
+      .limit(1);
+    if (!board) {
+      return c.json({ error: 'Tablero no encontrado' }, 404);
+    }
+
+    const [existingMembership] = await db
+      .select()
+      .from(boardMembers)
+      .where(
+        and(
+          eq(boardMembers.boardId, invitation.boardId),
+          eq(boardMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    if (existingMembership) {
+      await db
+        .update(boardMembers)
+        .set({
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(boardMembers.boardId, invitation.boardId),
+            eq(boardMembers.userId, userId),
+          ),
+        );
+    } else {
+      await db.insert(boardMembers).values({
+        boardId: invitation.boardId,
+        userId,
+        isActive: true,
+        joinedAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    const [updatedInvitation] = await db
+      .update(invitations)
+      .set({
+        status: 'accepted',
+        acceptedAt: new Date(),
+        acceptedByUserId: userId,
+        inviteeUserId: userId,
+        invitedAnonymousId: null,
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(invitations.id, invitation.id))
+      .returning();
+
+    return c.json({
+      invitation: updatedInvitation,
+      boardId: invitation.boardId,
+      alreadyMember: Boolean(existingMembership),
+    });
+  },
+);
+
+app.post(
+  '/api/invitations/decline',
+  zValidator('json', invitationActionSchema),
+  async (c) => {
+    const invitationSchemaError = await ensureInvitationsSchemaIsReady();
+    if (invitationSchemaError) {
+      return c.json({ error: invitationSchemaError }, 503);
+    }
+
+    const body = c.req.valid('json');
+    const tokenHash = hashInviteToken(body.token);
+
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.inviteTokenHash, tokenHash),
+          eq(invitations.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (!invitation) {
+      return c.json({ error: 'Invitación no encontrada' }, 404);
+    }
+
+    if (invitation.status !== 'pending') {
+      return c.json({ error: 'Esta invitación ya fue procesada' }, 400);
+    }
+
+    const [updatedInvitation] = await db
+      .update(invitations)
+      .set({
+        status: 'declined',
+        declinedAt: new Date(),
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(invitations.id, invitation.id))
+      .returning();
+
+    return c.json({ invitation: updatedInvitation });
+  },
+);
 
 const incomeSchema = z.object({
   boardId: z.string().uuid(),
@@ -225,16 +844,15 @@ app.get('/api/incomes', async (c) => {
   const boardId = c.req.query('boardId');
   if (!boardId) return c.json({ error: 'boardId is required' }, 400);
 
+  const access = await getUserBoardRole(userId, boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+  }
+
   const result = await db
     .select()
     .from(incomes)
-    .where(
-      and(
-        eq(incomes.userId, userId),
-        eq(incomes.boardId, boardId),
-        eq(incomes.isActive, true),
-      ),
-    );
+    .where(and(eq(incomes.boardId, boardId), eq(incomes.isActive, true)));
 
   return c.json(result);
 });
@@ -250,17 +868,16 @@ app.get('/api/incomes/:incomeId', async (c) => {
   const [income] = await db
     .select()
     .from(incomes)
-    .where(
-      and(
-        eq(incomes.id, incomeIdResult.data),
-        eq(incomes.userId, userId),
-        eq(incomes.isActive, true),
-      ),
-    )
+    .where(and(eq(incomes.id, incomeIdResult.data), eq(incomes.isActive, true)))
     .limit(1);
 
   if (!income) {
     return c.json({ error: 'Ingreso no encontrado' }, 404);
+  }
+
+  const access = await getUserBoardRole(userId, income.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este ingreso' }, 403);
   }
 
   return c.json(income);
@@ -277,17 +894,12 @@ app.patch(
       return c.json({ error: 'boardId inválido' }, 400);
     }
 
-    const [board] = await db
-      .select()
-      .from(boards)
-      .where(eq(boards.id, boardIdResult.data))
-      .limit(1);
-
-    if (!board) {
+    const access = await getUserBoardRole(userId, boardIdResult.data);
+    if (!access) {
       return c.json({ error: 'Tablero no encontrado' }, 404);
     }
 
-    if (board.ownerId !== userId) {
+    if (access.role !== 'owner') {
       return c.json(
         { error: 'No tienes permisos para actualizar este tablero' },
         403,
@@ -302,7 +914,7 @@ app.patch(
         spendingLimitAmount: body.spendingLimitAmount,
         updatedAt: new Date(),
       })
-      .where(eq(boards.id, boardIdResult.data))
+      .where(eq(boards.id, access.board.id))
       .returning();
 
     return c.json({ board: updatedBoard });
@@ -312,6 +924,14 @@ app.patch(
 app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
   const userId = c.get('userId');
   const body = c.req.valid('json');
+
+  const access = await getUserBoardRole(userId, body.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+  }
+  if (access.role === 'viewer') {
+    return c.json({ error: 'No tienes permisos para crear ingresos' }, 403);
+  }
 
   const [category] = await db
     .select()
@@ -355,16 +975,20 @@ app.patch(
       .select()
       .from(incomes)
       .where(
-        and(
-          eq(incomes.id, incomeIdResult.data),
-          eq(incomes.userId, userId),
-          eq(incomes.isActive, true),
-        ),
+        and(eq(incomes.id, incomeIdResult.data), eq(incomes.isActive, true)),
       )
       .limit(1);
 
     if (!existingIncome) {
       return c.json({ error: 'Ingreso no encontrado' }, 404);
+    }
+
+    const access = await getUserBoardRole(userId, existingIncome.boardId);
+    if (!access) {
+      return c.json({ error: 'No tienes acceso a este ingreso' }, 403);
+    }
+    if (access.role === 'viewer') {
+      return c.json({ error: 'No tienes permisos para editar ingresos' }, 403);
     }
 
     if (body.categoryId) {
@@ -391,7 +1015,7 @@ app.patch(
       .where(
         and(
           eq(incomes.id, incomeIdResult.data),
-          eq(incomes.userId, userId),
+          eq(incomes.boardId, existingIncome.boardId),
           eq(incomes.isActive, true),
         ),
       )
@@ -410,6 +1034,25 @@ app.delete('/api/incomes/:incomeId', async (c) => {
   }
 
   const result = await db
+    .select()
+    .from(incomes)
+    .where(and(eq(incomes.id, incomeIdResult.data), eq(incomes.isActive, true)))
+    .limit(1);
+
+  if (result.length === 0) {
+    return c.json({ error: 'Ingreso no encontrado' }, 404);
+  }
+
+  const existingIncome = result[0];
+  const access = await getUserBoardRole(userId, existingIncome.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este ingreso' }, 403);
+  }
+  if (access.role === 'viewer') {
+    return c.json({ error: 'No tienes permisos para eliminar ingresos' }, 403);
+  }
+
+  const deleted = await db
     .update(incomes)
     .set({
       isActive: false,
@@ -418,22 +1061,30 @@ app.delete('/api/incomes/:incomeId', async (c) => {
     .where(
       and(
         eq(incomes.id, incomeIdResult.data),
-        eq(incomes.userId, userId),
+        eq(incomes.boardId, existingIncome.boardId),
         eq(incomes.isActive, true),
       ),
     )
     .returning({ id: incomes.id });
 
-  if (result.length === 0) {
+  if (deleted.length === 0) {
     return c.json({ error: 'Ingreso no encontrado' }, 404);
   }
 
-  return c.json({ success: true, id: result[0].id });
+  return c.json({ success: true, id: deleted[0].id });
 });
 
 app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
   const userId = c.get('userId');
   const body = c.req.valid('json');
+
+  const access = await getUserBoardRole(userId, body.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+  }
+  if (access.role === 'viewer') {
+    return c.json({ error: 'No tienes permisos para crear gastos' }, 403);
+  }
 
   const [category] = await db
     .select()
@@ -474,16 +1125,17 @@ app.get('/api/expenses/:expenseId', async (c) => {
     .select()
     .from(expenses)
     .where(
-      and(
-        eq(expenses.id, expenseIdResult.data),
-        eq(expenses.userId, userId),
-        eq(expenses.isActive, true),
-      ),
+      and(eq(expenses.id, expenseIdResult.data), eq(expenses.isActive, true)),
     )
     .limit(1);
 
   if (!expense) {
     return c.json({ error: 'Gasto no encontrado' }, 404);
+  }
+
+  const access = await getUserBoardRole(userId, expense.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este gasto' }, 403);
   }
 
   return c.json(expense);
@@ -506,16 +1158,20 @@ app.patch(
       .select()
       .from(expenses)
       .where(
-        and(
-          eq(expenses.id, expenseIdResult.data),
-          eq(expenses.userId, userId),
-          eq(expenses.isActive, true),
-        ),
+        and(eq(expenses.id, expenseIdResult.data), eq(expenses.isActive, true)),
       )
       .limit(1);
 
     if (!existingExpense) {
       return c.json({ error: 'Gasto no encontrado' }, 404);
+    }
+
+    const access = await getUserBoardRole(userId, existingExpense.boardId);
+    if (!access) {
+      return c.json({ error: 'No tienes acceso a este gasto' }, 403);
+    }
+    if (access.role === 'viewer') {
+      return c.json({ error: 'No tienes permisos para editar gastos' }, 403);
     }
 
     if (body.categoryId) {
@@ -540,7 +1196,11 @@ app.patch(
         updatedAt: new Date(),
       })
       .where(
-        and(eq(expenses.id, expenseIdResult.data), eq(expenses.userId, userId)),
+        and(
+          eq(expenses.id, expenseIdResult.data),
+          eq(expenses.boardId, existingExpense.boardId),
+          eq(expenses.isActive, true),
+        ),
       )
       .returning();
 
@@ -556,6 +1216,27 @@ app.delete('/api/expenses/:expenseId', async (c) => {
     return c.json({ error: 'expenseId inválido' }, 400);
   }
 
+  const existingRows = await db
+    .select()
+    .from(expenses)
+    .where(
+      and(eq(expenses.id, expenseIdResult.data), eq(expenses.isActive, true)),
+    )
+    .limit(1);
+
+  if (existingRows.length === 0) {
+    return c.json({ error: 'Gasto no encontrado' }, 404);
+  }
+
+  const existingExpense = existingRows[0];
+  const access = await getUserBoardRole(userId, existingExpense.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este gasto' }, 403);
+  }
+  if (access.role === 'viewer') {
+    return c.json({ error: 'No tienes permisos para eliminar gastos' }, 403);
+  }
+
   const result = await db
     .update(expenses)
     .set({
@@ -565,7 +1246,7 @@ app.delete('/api/expenses/:expenseId', async (c) => {
     .where(
       and(
         eq(expenses.id, expenseIdResult.data),
-        eq(expenses.userId, userId),
+        eq(expenses.boardId, existingExpense.boardId),
         eq(expenses.isActive, true),
       ),
     )
@@ -583,16 +1264,15 @@ app.get('/api/expenses', async (c) => {
   const boardId = c.req.query('boardId');
   if (!boardId) return c.json({ error: 'boardId is required' }, 400);
 
+  const access = await getUserBoardRole(userId, boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+  }
+
   const result = await db
     .select()
     .from(expenses)
-    .where(
-      and(
-        eq(expenses.userId, userId),
-        eq(expenses.boardId, boardId),
-        eq(expenses.isActive, true),
-      ),
-    );
+    .where(and(eq(expenses.boardId, boardId), eq(expenses.isActive, true)));
 
   return c.json(result);
 });
@@ -600,6 +1280,14 @@ app.get('/api/expenses', async (c) => {
 app.post('/api/expenses', zValidator('json', expenseSchema), async (c) => {
   const userId = c.get('userId');
   const body = c.req.valid('json');
+
+  const access = await getUserBoardRole(userId, body.boardId);
+  if (!access) {
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+  }
+  if (access.role === 'viewer') {
+    return c.json({ error: 'No tienes permisos para crear gastos' }, 403);
+  }
 
   // Validar que la categoría sea de tipo 'expense'
   const [category] = await db

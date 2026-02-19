@@ -31,8 +31,8 @@ import { requireClientAuth } from '../lib/route-guards';
 import type { Category, Subcategory } from '../types';
 
 const API_BASE = getApiBase();
-const dashboardQueryKey = (accessToken: string) =>
-  ['dashboard', accessToken] as const;
+const dashboardQueryKey = (accessToken: string, boardId?: string | null) =>
+  ['dashboard', accessToken, boardId ?? 'default'] as const;
 const categoriesQueryKey = (accessToken: string) =>
   ['categories', accessToken, 'expense'] as const;
 
@@ -58,7 +58,13 @@ async function fetchCategories(accessToken: string) {
 }
 
 async function fetchDashboard(accessToken: string) {
-  const response = await fetch(`${API_BASE}/api/dashboard`, {
+  const activeBoardId = window.localStorage.getItem('activeBoardId');
+  const url = new URL(`${API_BASE}/api/dashboard`);
+  if (activeBoardId) {
+    url.searchParams.set('boardId', activeBoardId);
+  }
+
+  const response = await fetch(url.toString(), {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
@@ -199,7 +205,10 @@ function AddExpenseForm() {
       }
 
       const dashboard = await queryClient.fetchQuery({
-        queryKey: dashboardQueryKey(accessToken),
+        queryKey: dashboardQueryKey(
+          accessToken,
+          window.localStorage.getItem('activeBoardId'),
+        ),
         queryFn: () => fetchDashboard(accessToken),
       });
 
@@ -228,7 +237,10 @@ function AddExpenseForm() {
     onSuccess: async () => {
       if (accessToken) {
         await queryClient.invalidateQueries({
-          queryKey: dashboardQueryKey(accessToken),
+          queryKey: dashboardQueryKey(
+            accessToken,
+            window.localStorage.getItem('activeBoardId'),
+          ),
         });
       }
 

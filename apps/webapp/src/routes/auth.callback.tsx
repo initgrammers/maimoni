@@ -14,6 +14,13 @@ function AuthCallback() {
     mutationFn: () =>
       finishAuthFromCallback(new URLSearchParams(window.location.search)),
     onSuccess: () => {
+      const pendingInviteToken =
+        window.localStorage.getItem('pendingInviteToken');
+      if (pendingInviteToken) {
+        window.location.href = `/invite?token=${encodeURIComponent(pendingInviteToken)}`;
+        return;
+      }
+
       window.location.href = '/';
     },
     onError: () => {

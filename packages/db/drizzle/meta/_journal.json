@@ -29,6 +29,13 @@
       "when": 1771473392464,
       "tag": "0003_add_spending_limit_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771531200000,
+      "tag": "0004_invitation_membership_upgrade",
+      "breakpoints": true
     }
   ]
 }

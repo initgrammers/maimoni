@@ -43,8 +43,35 @@ type Expense = {
 
 type DashboardResponse = {
   board: Board;
+  role: 'owner' | 'editor' | 'viewer';
+  boards: Array<{
+    id: string;
+    name: string;
+    role: 'owner' | 'editor' | 'viewer';
+  }>;
   incomes: Income[];
   expenses: Expense[];
+};
+
+type BoardInvitation = {
+  id: string;
+  boardId: string;
+  invitedByUserId: string | null;
+  invitedPhoneNumber: string | null;
+  inviteeUserId: string | null;
+  acceptedByUserId: string | null;
+  inviteTokenHash: string | null;
+  targetRole: 'editor' | 'viewer';
+  status: 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
+  expiresAt: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+  revokedAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  inviterName: string | null;
+  inviterPhone: string | null;
 };
 
 type DisplayMovement = {
@@ -76,8 +103,13 @@ export const Route = createFileRoute('/' as never)({
   component: Dashboard,
 });
 
-async function fetchDashboard(accessToken: string) {
-  const response = await fetch(`${API_BASE}/api/dashboard`, {
+async function fetchDashboard(accessToken: string, boardId?: string | null) {
+  const url = new URL(`${API_BASE}/api/dashboard`);
+  if (boardId) {
+    url.searchParams.set('boardId', boardId);
+  }
+
+  const response = await fetch(url.toString(), {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
@@ -161,6 +193,79 @@ async function removeIncome(accessToken: string, incomeId: string) {
       error?: string;
     } | null;
     throw new Error(result?.error ?? 'No se pudo eliminar el ingreso');
+  }
+}
+
+async function fetchBoardInvitations(accessToken: string, boardId: string) {
+  const response = await fetch(
+    `${API_BASE}/api/boards/${boardId}/invitations`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'No se pudieron cargar las invitaciones');
+  }
+
+  return (await response.json()) as BoardInvitation[];
+}
+
+async function createBoardInvitation(
+  accessToken: string,
+  boardId: string,
+  payload: {
+    targetRole: 'editor' | 'viewer';
+    ttlHours: number;
+    phoneNumber?: string;
+  },
+) {
+  const response = await fetch(
+    `${API_BASE}/api/boards/${boardId}/invitations`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'No se pudo crear la invitación');
+  }
+
+  return (await response.json()) as {
+    invitation: BoardInvitation;
+    inviteToken: string;
+  };
+}
+
+async function revokeInvitation(accessToken: string, invitationId: string) {
+  const response = await fetch(
+    `${API_BASE}/api/invitations/${invitationId}/revoke`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'No se pudo revocar la invitación');
   }
 }
 
@@ -280,8 +385,14 @@ function Dashboard() {
   const [period, setPeriod] = useState<Period>('week');
   const [view, setView] = useState<DashboardView>('dashboard');
   const [spendingLimitInput, setSpendingLimitInput] = useState('');
+  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
+  const [inviteTtlHours, setInviteTtlHours] = useState('168');
+  const [invitePhoneNumber, setInvitePhoneNumber] = useState('');
   const [isExpenseDrawerOpen, setIsExpenseDrawerOpen] = useState(false);
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(
     null,
@@ -301,6 +412,7 @@ function Dashboard() {
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
     setAnonymousId(window.localStorage.getItem('anonymousId'));
+    setSelectedBoardId(window.localStorage.getItem('activeBoardId'));
     setPendingClaimAnonymousId(
       window.localStorage.getItem('pendingClaimAnonymousId'),
     );
@@ -357,13 +469,13 @@ function Dashboard() {
 
   const dashboardQuery = useQuery<DashboardResponse, Error>({
     queryKey: accessToken
-      ? dashboardQueryKey(accessToken)
+      ? ([...dashboardQueryKey(accessToken), selectedBoardId] as const)
       : (['dashboard', 'guest'] as const),
     queryFn: () => {
       if (!accessToken) {
         throw new Error('Falta el token de acceso');
       }
-      return fetchDashboard(accessToken);
+      return fetchDashboard(accessToken, selectedBoardId);
     },
     enabled:
       isHydrated &&
@@ -375,9 +487,44 @@ function Dashboard() {
 
   const data = dashboardQuery.data ?? null;
 
+  const invitationsQuery = useQuery<BoardInvitation[], Error>({
+    queryKey:
+      accessToken && data?.board.id
+        ? (['board-invitations', accessToken, data.board.id] as const)
+        : (['board-invitations', 'guest'] as const),
+    queryFn: () => {
+      if (!accessToken || !data?.board.id) {
+        throw new Error('No hay tablero seleccionado');
+      }
+
+      return fetchBoardInvitations(accessToken, data.board.id);
+    },
+    enabled: Boolean(accessToken && data?.board.id),
+  });
+
+  const pendingInvitations = useMemo(
+    () =>
+      (invitationsQuery.data ?? []).filter(
+        (invitation) => invitation.status === 'pending',
+      ),
+    [invitationsQuery.data],
+  );
+
   useEffect(() => {
     setSpendingLimitInput(data?.board.spendingLimitAmount ?? '');
   }, [data?.board.spendingLimitAmount]);
+
+  useEffect(() => {
+    if (!data?.board.id) {
+      return;
+    }
+
+    if (selectedBoardId !== data.board.id) {
+      setSelectedBoardId(data.board.id);
+    }
+
+    window.localStorage.setItem('activeBoardId', data.board.id);
+  }, [data?.board.id, selectedBoardId]);
 
   const boardSettingsMutation = useMutation<
     { board: Board },
@@ -408,6 +555,61 @@ function Dashboard() {
           };
         },
       );
+    },
+  });
+
+  const createInvitationMutation = useMutation<
+    { invitation: BoardInvitation; inviteToken: string },
+    Error,
+    {
+      boardId: string;
+      targetRole: 'editor' | 'viewer';
+      ttlHours: number;
+      phoneNumber?: string;
+    }
+  >({
+    mutationFn: ({ boardId, targetRole, ttlHours, phoneNumber }) => {
+      if (!accessToken) {
+        throw new Error('Sesión no disponible');
+      }
+
+      return createBoardInvitation(accessToken, boardId, {
+        targetRole,
+        ttlHours,
+        phoneNumber,
+      });
+    },
+    onSuccess: async () => {
+      if (!accessToken || !data?.board.id) {
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ['board-invitations', accessToken, data.board.id],
+      });
+    },
+  });
+
+  const revokeInvitationMutation = useMutation<
+    void,
+    Error,
+    { invitationId: string }
+  >({
+    mutationFn: ({ invitationId }) => {
+      if (!accessToken) {
+        throw new Error('Sesión no disponible');
+      }
+
+      return revokeInvitation(accessToken, invitationId);
+    },
+    onSuccess: async () => {
+      if (!accessToken || !data?.board.id) {
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ['board-invitations', accessToken, data.board.id],
+      });
     },
   });
 
@@ -871,6 +1073,54 @@ function Dashboard() {
     }
   }
 
+  async function createInvitationLink() {
+    if (!data) return;
+
+    const ttlHours = Number(inviteTtlHours);
+    if (!Number.isFinite(ttlHours) || ttlHours < 1) {
+      setInviteError('La duración debe ser mayor o igual a 1 hora');
+      return;
+    }
+
+    setInviteError(null);
+    setInviteSuccess(null);
+
+    try {
+      const result = await createInvitationMutation.mutateAsync({
+        boardId: data.board.id,
+        targetRole: inviteRole,
+        ttlHours,
+        phoneNumber: invitePhoneNumber.trim() || undefined,
+      });
+
+      const inviteUrl = `${window.location.origin}/invite?token=${encodeURIComponent(result.inviteToken)}`;
+      await navigator.clipboard.writeText(inviteUrl);
+      setInvitePhoneNumber('');
+      setInviteSuccess('Invitación creada y copiada al portapapeles');
+    } catch (invitationError) {
+      setInviteError(
+        invitationError instanceof Error
+          ? invitationError.message
+          : 'No se pudo crear la invitación',
+      );
+    }
+  }
+
+  async function revokeInvitationById(invitationId: string) {
+    setInviteError(null);
+    setInviteSuccess(null);
+    try {
+      await revokeInvitationMutation.mutateAsync({ invitationId });
+      setInviteSuccess('Invitación revocada correctamente');
+    } catch (revokeError) {
+      setInviteError(
+        revokeError instanceof Error
+          ? revokeError.message
+          : 'No se pudo revocar la invitación',
+      );
+    }
+  }
+
   function handleExpenseDrawerOpenChange(open: boolean) {
     setIsExpenseDrawerOpen(open);
 
@@ -1076,6 +1326,31 @@ function Dashboard() {
                   Iniciar sesión
                 </button>
               </div>
+            )}
+
+            {data.boards.length > 1 && (
+              <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Tablero activo
+                </p>
+                <select
+                  value={data.board.id}
+                  onChange={(event) => {
+                    const nextBoardId = event.target.value;
+                    setSelectedBoardId(nextBoardId);
+                    window.localStorage.setItem('activeBoardId', nextBoardId);
+                    setInviteError(null);
+                    setInviteSuccess(null);
+                  }}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
+                >
+                  {data.boards.map((boardOption) => (
+                    <option key={boardOption.id} value={boardOption.id}>
+                      {boardOption.name} ({boardOption.role})
+                    </option>
+                  ))}
+                </select>
+              </section>
             )}
 
             <section className="mb-6">
@@ -1318,6 +1593,123 @@ function Dashboard() {
                 successMessage={settingsSuccess}
                 errorMessage={settingsError}
               />
+              {data.role !== 'viewer' && (
+                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div>
+                    <p className="text-base font-semibold text-slate-900">
+                      Miembros e invitaciones
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Crea un enlace y compártelo para sumar personas a este
+                      tablero.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="space-y-1 text-sm text-slate-600">
+                      <span>Rol</span>
+                      <select
+                        value={inviteRole}
+                        onChange={(event) =>
+                          setInviteRole(
+                            event.target.value as 'editor' | 'viewer',
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      >
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-600">
+                      <span>Duración (horas)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={inviteTtlHours}
+                        onChange={(event) =>
+                          setInviteTtlHours(event.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      />
+                    </label>
+                  </div>
+                  <label className="space-y-1 text-sm text-slate-600">
+                    <span>Teléfono (opcional)</span>
+                    <input
+                      type="text"
+                      value={invitePhoneNumber}
+                      onChange={(event) =>
+                        setInvitePhoneNumber(event.target.value)
+                      }
+                      placeholder="Ej: +593999999999"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void createInvitationLink();
+                    }}
+                    disabled={createInvitationMutation.isPending}
+                    className="mt-2 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {createInvitationMutation.isPending
+                      ? 'Creando...'
+                      : 'Crear enlace de invitación'}
+                  </button>
+
+                  {inviteSuccess && (
+                    <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                      {inviteSuccess}
+                    </p>
+                  )}
+                  {inviteError && (
+                    <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                      {inviteError}
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">
+                      Invitaciones pendientes ({pendingInvitations.length})
+                    </p>
+                    {invitationsQuery.isPending ? (
+                      <p className="text-sm text-slate-500">
+                        Cargando invitaciones...
+                      </p>
+                    ) : pendingInvitations.length === 0 ? (
+                      <p className="text-sm text-slate-500">
+                        No hay invitaciones pendientes.
+                      </p>
+                    ) : (
+                      pendingInvitations.slice(0, 8).map((invitation) => (
+                        <div
+                          key={invitation.id}
+                          className="rounded-xl border border-slate-200 bg-white p-3"
+                        >
+                          <p className="text-sm font-medium text-slate-800">
+                            {invitation.invitedPhoneNumber ||
+                              'Enlace compartido'}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            rol {invitation.targetRole}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void revokeInvitationById(invitation.id);
+                            }}
+                            disabled={revokeInvitationMutation.isPending}
+                            className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                          >
+                            Eliminar invitación
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <p className="text-sm text-slate-500">
                   Si necesitas proteger tu dispositivo o cerrar sesión remota,
@@ -1360,6 +1752,121 @@ function Dashboard() {
                 successMessage={settingsSuccess}
                 errorMessage={settingsError}
               />
+              {data.role !== 'viewer' && (
+                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div>
+                    <p className="text-base font-semibold text-slate-900">
+                      Miembros e invitaciones
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Puedes invitar personas incluso usando sesión anónima.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="space-y-1 text-sm text-slate-600">
+                      <span>Rol</span>
+                      <select
+                        value={inviteRole}
+                        onChange={(event) =>
+                          setInviteRole(
+                            event.target.value as 'editor' | 'viewer',
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      >
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-600">
+                      <span>Duración (horas)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={inviteTtlHours}
+                        onChange={(event) =>
+                          setInviteTtlHours(event.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                      />
+                    </label>
+                  </div>
+                  <label className="space-y-1 text-sm text-slate-600">
+                    <span>Teléfono (opcional)</span>
+                    <input
+                      type="text"
+                      value={invitePhoneNumber}
+                      onChange={(event) =>
+                        setInvitePhoneNumber(event.target.value)
+                      }
+                      placeholder="Ej: +593999999999"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void createInvitationLink();
+                    }}
+                    disabled={createInvitationMutation.isPending}
+                    className="mt-2 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {createInvitationMutation.isPending
+                      ? 'Creando...'
+                      : 'Crear enlace de invitación'}
+                  </button>
+                  {inviteSuccess && (
+                    <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                      {inviteSuccess}
+                    </p>
+                  )}
+                  {inviteError && (
+                    <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                      {inviteError}
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">
+                      Invitaciones pendientes ({pendingInvitations.length})
+                    </p>
+                    {invitationsQuery.isPending ? (
+                      <p className="text-sm text-slate-500">
+                        Cargando invitaciones...
+                      </p>
+                    ) : pendingInvitations.length === 0 ? (
+                      <p className="text-sm text-slate-500">
+                        No hay invitaciones pendientes.
+                      </p>
+                    ) : (
+                      pendingInvitations.slice(0, 8).map((invitation) => (
+                        <div
+                          key={invitation.id}
+                          className="rounded-xl border border-slate-200 bg-white p-3"
+                        >
+                          <p className="text-sm font-medium text-slate-800">
+                            {invitation.invitedPhoneNumber ||
+                              'Enlace compartido'}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            rol {invitation.targetRole}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void revokeInvitationById(invitation.id);
+                            }}
+                            disabled={revokeInvitationMutation.isPending}
+                            className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                          >
+                            Eliminar invitación
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
           </section>

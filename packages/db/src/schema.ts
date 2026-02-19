@@ -47,6 +47,7 @@ export const boardMembers = pgTable(
     userId: uuid('user_id')
       .references(() => users.id)
       .notNull(),
+    role: text('role').default('editor').notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     joinedAt: timestamp('joined_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -112,9 +113,18 @@ export const invitations = pgTable('invitations', {
   boardId: uuid('board_id')
     .references(() => boards.id)
     .notNull(),
+  invitedByUserId: uuid('invited_by_user_id').references(() => users.id),
   invitedPhoneNumber: text('invited_phone_number'),
   invitedAnonymousId: uuid('invited_anonymous_id'),
+  inviteeUserId: uuid('invitee_user_id').references(() => users.id),
+  acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id),
+  inviteTokenHash: text('invite_token_hash'),
+  targetRole: text('target_role').default('editor').notNull(),
   status: text('status').default('pending').notNull(),
+  expiresAt: timestamp('expires_at'),
+  acceptedAt: timestamp('accepted_at'),
+  declinedAt: timestamp('declined_at'),
+  revokedAt: timestamp('revoked_at'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
