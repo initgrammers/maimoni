@@ -221,6 +221,7 @@ async function listUserBoards(userId: string) {
       .select({
         id: boards.id,
         name: boards.name,
+        spendingLimitAmount: boards.spendingLimitAmount,
       })
       .from(boards)
       .where(and(eq(boards.ownerId, userId), eq(boards.isActive, true))),
@@ -244,6 +245,7 @@ async function listUserBoards(userId: string) {
           .select({
             id: boards.id,
             name: boards.name,
+            spendingLimitAmount: boards.spendingLimitAmount,
           })
           .from(boards)
           .where(
@@ -255,11 +257,20 @@ async function listUserBoards(userId: string) {
             ),
           );
 
-  const results: Array<{ id: string; name: string; role: BoardAccessRole }> =
-    [];
+  const results: Array<{
+    id: string;
+    name: string;
+    spendingLimitAmount: string | null;
+    role: BoardAccessRole;
+  }> = [];
 
   for (const board of ownedBoards) {
-    results.push({ id: board.id, name: board.name, role: 'owner' });
+    results.push({
+      id: board.id,
+      name: board.name,
+      spendingLimitAmount: board.spendingLimitAmount,
+      role: 'owner',
+    });
   }
 
   for (const board of membershipBoards) {
@@ -267,7 +278,12 @@ async function listUserBoards(userId: string) {
       continue;
     }
 
-    results.push({ id: board.id, name: board.name, role: 'editor' });
+    results.push({
+      id: board.id,
+      name: board.name,
+      spendingLimitAmount: board.spendingLimitAmount,
+      role: 'editor',
+    });
   }
 
   return results;
@@ -293,7 +309,6 @@ app.use('/api/*', async (c, next) => {
   if (!token) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
-
 
   let verified: Awaited<
     ReturnType<typeof authClient.verify<typeof authSubjects>>
@@ -832,12 +847,18 @@ const incomeUpdateSchema = z
     message: 'Debes enviar al menos un campo para actualizar',
   });
 
-const boardSettingsSchema = z.object({
-  spendingLimitAmount: z
-    .string()
-    .regex(/^\d+(\.\d{1,2})?$/)
-    .nullable(),
-});
+const boardSettingsSchema = z
+  .object({
+    name: z.string().min(1).max(100).optional(),
+    spendingLimitAmount: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .nullable()
+      .optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Debes enviar al menos un campo para actualizar',
+  });
 
 app.get('/api/incomes', async (c) => {
   const userId = c.get('userId');
@@ -908,18 +929,68 @@ app.patch(
 
     const body = c.req.valid('json');
 
+    const updateFields: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (body.name !== undefined) {
+      updateFields.name = body.name;
+    }
+
+    if (body.spendingLimitAmount !== undefined) {
+      updateFields.spendingLimitAmount = body.spendingLimitAmount;
+    }
+
     const [updatedBoard] = await db
       .update(boards)
-      .set({
-        spendingLimitAmount: body.spendingLimitAmount,
-        updatedAt: new Date(),
-      })
+      .set(updateFields)
       .where(eq(boards.id, access.board.id))
       .returning();
 
     return c.json({ board: updatedBoard });
   },
 );
+
+app.delete('/api/boards/:boardId', async (c) => {
+  const userId = c.get('userId');
+  const boardId = c.req.param('boardId');
+  const boardIdResult = z.string().uuid().safeParse(boardId);
+  if (!boardIdResult.success) {
+    return c.json({ error: 'boardId inválido' }, 400);
+  }
+
+  const access = await getUserBoardRole(userId, boardIdResult.data);
+  if (!access) {
+    return c.json({ error: 'Tablero no encontrado' }, 404);
+  }
+
+  if (access.role !== 'owner') {
+    return c.json(
+      { error: 'No tienes permisos para eliminar este tablero' },
+      403,
+    );
+  }
+
+  const userBoards = await listUserBoards(userId);
+  if (userBoards.length <= 1) {
+    return c.json({ error: 'No puedes eliminar tu único tablero' }, 400);
+  }
+
+  const result = await db
+    .update(boards)
+    .set({
+      isActive: false,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(boards.id, boardIdResult.data), eq(boards.isActive, true)))
+    .returning({ id: boards.id });
+
+  if (result.length === 0) {
+    return c.json({ error: 'Tablero no encontrado' }, 404);
+  }
+
+  return c.json({ success: true, id: result[0].id });
+});
 
 app.post('/api/incomes', zValidator('json', incomeSchema), async (c) => {
   const userId = c.get('userId');

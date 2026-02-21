@@ -50,10 +50,10 @@ function toEcuadorPhoneNumber(input: string) {
   return `+593${local}`;
 }
 
-
 const storage = createStorage(JSON.parse(getEnv('AUTH_STORAGE')));
 
 const issuerApp = issuer({
+  allow: async () => true,
   storage,
   basePath: '/auth',
   subjects: authSubjects,
@@ -119,6 +119,5 @@ const issuerApp = issuer({
     throw new Error('Invalid provider');
   },
 });
-
 
 export const handler = handle(issuerApp);

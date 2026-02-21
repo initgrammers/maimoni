@@ -57,7 +57,7 @@ export async function startAuth(provider: 'anonymous' | 'whatsapp') {
     pkce: true,
   });
 
-  sessionStorage.setItem('auth_challenge', JSON.stringify(challenge));
+  localStorage.setItem('auth_challenge', JSON.stringify(challenge));
   window.location.href = url;
 }
 
@@ -67,7 +67,7 @@ export async function finishAuthFromCallback(search: URLSearchParams) {
     throw new Error('Missing code');
   }
 
-  const challengeRaw = sessionStorage.getItem('auth_challenge');
+  const challengeRaw = localStorage.getItem('auth_challenge');
   if (!challengeRaw) {
     throw new Error('Missing auth challenge');
   }
@@ -84,7 +84,7 @@ export async function finishAuthFromCallback(search: URLSearchParams) {
     throw new Error('Failed to exchange authorization code');
   }
 
-  sessionStorage.removeItem('auth_challenge');
+  localStorage.removeItem('auth_challenge');
   localStorage.setItem('accessToken', exchanged.tokens.access);
   localStorage.setItem('refreshToken', exchanged.tokens.refresh);
 

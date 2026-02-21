@@ -3,15 +3,15 @@
 import { getEnv } from '../packages/utils/src/index';
 import { router } from './router';
 
-export const authTable = new sst.aws.Dynamo("authTable", {
+export const authTable = new sst.aws.Dynamo('authTable', {
   fields: {
-    pk: "string",
-    sk: "string",
+    pk: 'string',
+    sk: 'string',
   },
-  ttl: "expiry",
+  ttl: 'expiry',
   primaryIndex: {
-    hashKey: "pk",
-    rangeKey: "sk",
+    hashKey: 'pk',
+    rangeKey: 'sk',
   },
 });
 
@@ -25,8 +25,8 @@ export const auth = new sst.aws.Auth.v1('Auth', {
         'TWILIO_AUTH_TOKEN',
         'TWILIO_WHATSAPP_NUMBER',
       ]),
-      AUTH_STORAGE: $dev ?
-        `{"type":"memory","options":{"persist": "./persist.json"}}`
+      AUTH_STORAGE: $dev
+        ? `{"type":"memory","options":{"persist": "./persist.json"}}`
         : $interpolate`{"type":"dynamo","options":{"table":"${authTable.name}"}}`,
     },
     link: [authTable],

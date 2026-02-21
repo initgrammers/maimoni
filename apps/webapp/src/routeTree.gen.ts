@@ -16,6 +16,7 @@ import { Route as CallbackAuthRouteImport } from './routes/callback.auth'
 import { Route as AddIncomeRouteImport } from './routes/add.income'
 import { Route as IncomesIncomeIdEditRouteImport } from './routes/incomes.$incomeId.edit'
 import { Route as ExpensesExpenseIdEditRouteImport } from './routes/expenses.$expenseId.edit'
+import { Route as BoardsBoardIdEditRouteImport } from './routes/boards.$boardId.edit'
 
 const InviteRoute = InviteRouteImport.update({
   id: '/invite',
@@ -52,6 +53,11 @@ const ExpensesExpenseIdEditRoute = ExpensesExpenseIdEditRouteImport.update({
   path: '/expenses/$expenseId/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BoardsBoardIdEditRoute = BoardsBoardIdEditRouteImport.update({
+  id: '/boards/$boardId/edit',
+  path: '/boards/$boardId/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
   '/callback/auth': typeof CallbackAuthRoute
+  '/boards/$boardId/edit': typeof BoardsBoardIdEditRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
   '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
   '/callback/auth': typeof CallbackAuthRoute
+  '/boards/$boardId/edit': typeof BoardsBoardIdEditRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
   '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
   '/callback/auth': typeof CallbackAuthRoute
+  '/boards/$boardId/edit': typeof BoardsBoardIdEditRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
   '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/add/income'
     | '/callback/auth'
+    | '/boards/$boardId/edit'
     | '/expenses/$expenseId/edit'
     | '/incomes/$incomeId/edit'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/add/income'
     | '/callback/auth'
+    | '/boards/$boardId/edit'
     | '/expenses/$expenseId/edit'
     | '/incomes/$incomeId/edit'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/add/income'
     | '/callback/auth'
+    | '/boards/$boardId/edit'
     | '/expenses/$expenseId/edit'
     | '/incomes/$incomeId/edit'
   fileRoutesById: FileRoutesById
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AddRoute: typeof AddRouteWithChildren
   InviteRoute: typeof InviteRoute
   CallbackAuthRoute: typeof CallbackAuthRoute
+  BoardsBoardIdEditRoute: typeof BoardsBoardIdEditRoute
   ExpensesExpenseIdEditRoute: typeof ExpensesExpenseIdEditRoute
   IncomesIncomeIdEditRoute: typeof IncomesIncomeIdEditRoute
 }
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpensesExpenseIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/boards/$boardId/edit': {
+      id: '/boards/$boardId/edit'
+      path: '/boards/$boardId/edit'
+      fullPath: '/boards/$boardId/edit'
+      preLoaderRoute: typeof BoardsBoardIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -189,6 +209,7 @@ const rootRouteChildren: RootRouteChildren = {
   AddRoute: AddRouteWithChildren,
   InviteRoute: InviteRoute,
   CallbackAuthRoute: CallbackAuthRoute,
+  BoardsBoardIdEditRoute: BoardsBoardIdEditRoute,
   ExpensesExpenseIdEditRoute: ExpensesExpenseIdEditRoute,
   IncomesIncomeIdEditRoute: IncomesIncomeIdEditRoute,
 }

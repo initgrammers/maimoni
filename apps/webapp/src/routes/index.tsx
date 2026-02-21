@@ -47,6 +47,7 @@ type DashboardResponse = {
   boards: Array<{
     id: string;
     name: string;
+    spendingLimitAmount: string | null;
     role: 'owner' | 'editor' | 'viewer';
   }>;
   incomes: Income[];
@@ -140,30 +141,6 @@ async function claimAnonymousBoard(accessToken: string, anonymousId: string) {
   }
 }
 
-async function updateBoardSettings(
-  accessToken: string,
-  boardId: string,
-  spendingLimitAmount: string | null,
-) {
-  const response = await fetch(`${API_BASE}/api/boards/${boardId}/settings`, {
-    method: 'PATCH',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ spendingLimitAmount }),
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(payload?.error ?? 'No se pudo actualizar la configuración');
-  }
-
-  return (await response.json()) as { board: Board };
-}
-
 async function removeExpense(accessToken: string, expenseId: string) {
   const response = await fetch(`${API_BASE}/api/expenses/${expenseId}`, {
     method: 'DELETE',
@@ -193,6 +170,22 @@ async function removeIncome(accessToken: string, incomeId: string) {
       error?: string;
     } | null;
     throw new Error(result?.error ?? 'No se pudo eliminar el ingreso');
+  }
+}
+
+async function removeBoard(accessToken: string, boardId: string) {
+  const response = await fetch(`${API_BASE}/api/boards/${boardId}`, {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error ?? 'No se pudo eliminar el tablero');
   }
 }
 
@@ -269,76 +262,69 @@ async function revokeInvitation(accessToken: string, invitationId: string) {
   }
 }
 
-type BoardLimitSettingsCardProps = {
-  value: string;
-  onChange: (value: string) => void;
-  onSave: () => void;
-  onClear: () => void;
-  saving: boolean;
-  successMessage: string | null;
-  errorMessage: string | null;
+type BoardSelectorCardProps = {
+  boards: DashboardResponse['boards'];
+  activeBoardId: string;
+  onBoardTap: (board: DashboardResponse['boards'][number]) => void;
 };
 
-function BoardLimitSettingsCard({
-  value,
-  onChange,
-  onSave,
-  onClear,
-  saving,
-  successMessage,
-  errorMessage,
-}: BoardLimitSettingsCardProps) {
+const roleLabels: Record<string, string> = {
+  owner: 'Dueño',
+  editor: 'Editor',
+  viewer: 'Lector',
+};
+
+function BoardSelectorCard({
+  boards: boardList,
+  activeBoardId,
+  onBoardTap,
+}: BoardSelectorCardProps) {
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
       <div>
-        <p className="text-base font-semibold text-slate-900">
-          Límite de gasto
-        </p>
+        <p className="text-base font-semibold text-slate-900">Mis tableros</p>
         <p className="text-sm text-slate-500">
-          Define un monto máximo para tu tablero actual.
+          {boardList.length === 1
+            ? 'Tienes un tablero. Toca para ver sus detalles.'
+            : `Tienes ${boardList.length} tableros. Toca uno para ver sus detalles.`}
         </p>
       </div>
 
-      <label className="block">
-        <span className="mb-1 block text-sm font-medium text-slate-600">
-          Monto (USD)
-        </span>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={value}
-          onChange={(event) => {
-            onChange(event.target.value);
-          }}
-          placeholder="Ej: 250.00"
-          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-500"
-          disabled={saving}
-        />
-      </label>
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving}
-          className="flex-1 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-60"
-        >
-          {saving ? 'Guardando...' : 'Guardar'}
-        </button>
-        <button
-          type="button"
-          onClick={onClear}
-          disabled={saving}
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all active:scale-95 disabled:opacity-60"
-        >
-          Quitar límite
-        </button>
+      <div className="space-y-2">
+        {boardList.map((board) => {
+          const isActive = board.id === activeBoardId;
+          return (
+            <button
+              key={board.id}
+              type="button"
+              onClick={() => {
+                onBoardTap(board);
+              }}
+              className={`flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.99] ${
+                isActive
+                  ? 'border-slate-900 bg-white shadow-sm'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`truncate text-sm font-semibold ${isActive ? 'text-slate-900' : 'text-slate-700'}`}
+                >
+                  {board.name}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {roleLabels[board.role] ?? board.role}
+                </p>
+              </div>
+              {isActive && (
+                <span className="shrink-0 rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">
+                  Activo
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
-
-      {successMessage && (
-        <p className="text-sm text-emerald-700">{successMessage}</p>
-      )}
-      {errorMessage && <p className="text-sm text-rose-600">{errorMessage}</p>}
     </div>
   );
 }
@@ -384,10 +370,7 @@ function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('week');
   const [view, setView] = useState<DashboardView>('dashboard');
-  const [spendingLimitInput, setSpendingLimitInput] = useState('');
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
-  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
@@ -408,6 +391,12 @@ function Dashboard() {
     null,
   );
   const [showDeleteIncomeConfirm, setShowDeleteIncomeConfirm] = useState(false);
+  const [isBoardDrawerOpen, setIsBoardDrawerOpen] = useState(false);
+  const [selectedBoardForDrawer, setSelectedBoardForDrawer] = useState<
+    DashboardResponse['boards'][number] | null
+  >(null);
+  const [showDeleteBoardConfirm, setShowDeleteBoardConfirm] = useState(false);
+  const [boardActionError, setBoardActionError] = useState<string | null>(null);
 
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
@@ -436,6 +425,8 @@ function Dashboard() {
       });
     },
     onError: (claimError) => {
+      window.localStorage.removeItem('pendingClaimAnonymousId');
+      setPendingClaimAnonymousId(null);
       setError(
         claimError instanceof Error
           ? claimError.message
@@ -511,10 +502,6 @@ function Dashboard() {
   );
 
   useEffect(() => {
-    setSpendingLimitInput(data?.board.spendingLimitAmount ?? '');
-  }, [data?.board.spendingLimitAmount]);
-
-  useEffect(() => {
     if (!data?.board.id) {
       return;
     }
@@ -525,38 +512,6 @@ function Dashboard() {
 
     window.localStorage.setItem('activeBoardId', data.board.id);
   }, [data?.board.id, selectedBoardId]);
-
-  const boardSettingsMutation = useMutation<
-    { board: Board },
-    Error,
-    { boardId: string; spendingLimitAmount: string | null }
-  >({
-    mutationFn: ({ boardId, spendingLimitAmount }) => {
-      if (!accessToken) {
-        throw new Error('Sesión no disponible');
-      }
-      return updateBoardSettings(accessToken, boardId, spendingLimitAmount);
-    },
-    onSuccess: ({ board }) => {
-      if (!accessToken) {
-        return;
-      }
-
-      queryClient.setQueryData<DashboardResponse>(
-        dashboardQueryKey(accessToken),
-        (previous) => {
-          if (!previous) {
-            return previous;
-          }
-
-          return {
-            ...previous,
-            board,
-          };
-        },
-      );
-    },
-  });
 
   const createInvitationMutation = useMutation<
     { invitation: BoardInvitation; inviteToken: string },
@@ -643,6 +598,33 @@ function Dashboard() {
       return removeIncome(accessToken, incomeId);
     },
     onSuccess: async () => {
+      if (!accessToken) {
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: dashboardQueryKey(accessToken),
+      });
+    },
+  });
+
+  const deleteBoardMutation = useMutation<void, Error, { boardId: string }>({
+    mutationFn: ({ boardId }) => {
+      if (!accessToken) {
+        throw new Error('Sesión no disponible');
+      }
+
+      return removeBoard(accessToken, boardId);
+    },
+    onSuccess: async (_, { boardId }) => {
+      const activeBoardId = window.localStorage.getItem('activeBoardId');
+      if (activeBoardId === boardId) {
+        window.localStorage.removeItem('activeBoardId');
+        setSelectedBoardId(null);
+      }
+
+      handleBoardDrawerOpenChange(false);
+
       if (!accessToken) {
         return;
       }
@@ -1007,70 +989,13 @@ function Dashboard() {
     window.localStorage.removeItem('refreshToken');
     window.localStorage.removeItem('anonymousId');
     window.localStorage.removeItem('pendingClaimAnonymousId');
-    window.sessionStorage.removeItem('auth_challenge');
+    window.localStorage.removeItem('auth_challenge');
     setAccessToken(null);
     setAnonymousId(null);
     setPendingClaimAnonymousId(null);
     setClaimRequestKey(null);
     setError(null);
-    setSettingsError(null);
-    setSettingsSuccess(null);
     setView('dashboard');
-  }
-
-  function normalizeAmount(value: string) {
-    return value.trim().replace(',', '.');
-  }
-
-  async function saveSpendingLimit() {
-    if (!data) return;
-
-    const parsed = normalizeAmount(spendingLimitInput);
-    if (!/^\d+(\.\d{1,2})?$/.test(parsed)) {
-      setSettingsSuccess(null);
-      setSettingsError('Ingresa un monto válido con hasta 2 decimales');
-      return;
-    }
-
-    setSettingsSuccess(null);
-    setSettingsError(null);
-
-    try {
-      const response = await boardSettingsMutation.mutateAsync({
-        boardId: data.board.id,
-        spendingLimitAmount: parsed,
-      });
-      setSpendingLimitInput(response.board.spendingLimitAmount ?? '');
-      setSettingsSuccess('Límite actualizado correctamente');
-    } catch (updateError) {
-      setSettingsError(
-        updateError instanceof Error
-          ? updateError.message
-          : 'No se pudo guardar el límite',
-      );
-    }
-  }
-
-  async function clearSpendingLimit() {
-    if (!data) return;
-
-    setSettingsSuccess(null);
-    setSettingsError(null);
-
-    try {
-      await boardSettingsMutation.mutateAsync({
-        boardId: data.board.id,
-        spendingLimitAmount: null,
-      });
-      setSpendingLimitInput('');
-      setSettingsSuccess('Límite eliminado correctamente');
-    } catch (updateError) {
-      setSettingsError(
-        updateError instanceof Error
-          ? updateError.message
-          : 'No se pudo eliminar el límite',
-      );
-    }
   }
 
   async function createInvitationLink() {
@@ -1094,9 +1019,34 @@ function Dashboard() {
       });
 
       const inviteUrl = `${window.location.origin}/invite?token=${encodeURIComponent(result.inviteToken)}`;
-      await navigator.clipboard.writeText(inviteUrl);
+
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        copied = true;
+      } catch {
+        // iOS Safari loses user-gesture context after await, fallback to execCommand
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = inviteUrl;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          copied = document.execCommand('copy');
+          document.body.removeChild(textarea);
+        } catch {
+          copied = false;
+        }
+      }
+
       setInvitePhoneNumber('');
-      setInviteSuccess('Invitación creada y copiada al portapapeles');
+      setInviteSuccess(
+        copied
+          ? 'Invitación creada y copiada al portapapeles'
+          : `Invitación creada. Copia el enlace: ${inviteUrl}`,
+      );
     } catch (invitationError) {
       setInviteError(
         invitationError instanceof Error
@@ -1163,6 +1113,36 @@ function Dashboard() {
     setIsIncomeDrawerOpen(true);
   }
 
+  function handleBoardDrawerOpenChange(open: boolean) {
+    setIsBoardDrawerOpen(open);
+
+    if (!open) {
+      setSelectedBoardForDrawer(null);
+      setShowDeleteBoardConfirm(false);
+      setBoardActionError(null);
+    }
+  }
+
+  function openBoardDetails(board: DashboardResponse['boards'][number]) {
+    setSelectedBoardForDrawer(board);
+    setShowDeleteBoardConfirm(false);
+    setBoardActionError(null);
+    setIsBoardDrawerOpen(true);
+  }
+
+  function selectBoardFromDrawer() {
+    if (!selectedBoardForDrawer) {
+      return;
+    }
+
+    const boardId = selectedBoardForDrawer.id;
+    setSelectedBoardId(boardId);
+    window.localStorage.setItem('activeBoardId', boardId);
+    setInviteError(null);
+    setInviteSuccess(null);
+    handleBoardDrawerOpenChange(false);
+  }
+
   async function deleteSelectedExpense() {
     if (!selectedExpenseId) {
       return;
@@ -1199,6 +1179,25 @@ function Dashboard() {
         deleteError instanceof Error
           ? deleteError.message
           : 'No se pudo eliminar el ingreso',
+      );
+    }
+  }
+
+  async function deleteSelectedBoard() {
+    if (!selectedBoardForDrawer) {
+      return;
+    }
+
+    setBoardActionError(null);
+    try {
+      await deleteBoardMutation.mutateAsync({
+        boardId: selectedBoardForDrawer.id,
+      });
+    } catch (deleteError) {
+      setBoardActionError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : 'No se pudo eliminar el tablero',
       );
     }
   }
@@ -1276,15 +1275,6 @@ function Dashboard() {
   }
 
   if (!data) {
-    if (showInitialDashboardLoading) {
-      return (
-        <DashboardLoading
-          title="Cargando tu tablero"
-          description="Sincronizando ingresos, gastos y configuración..."
-        />
-      );
-    }
-
     if (dashboardQuery.error || error) {
       return (
         <DashboardLoading
@@ -1294,6 +1284,15 @@ function Dashboard() {
             dashboardQuery.error?.message ??
             'Intenta nuevamente en unos segundos.'
           }
+        />
+      );
+    }
+
+    if (showInitialDashboardLoading) {
+      return (
+        <DashboardLoading
+          title="Cargando tu tablero"
+          description="Sincronizando ingresos, gastos y configuración..."
         />
       );
     }
@@ -1328,30 +1327,9 @@ function Dashboard() {
               </div>
             )}
 
-            {data.boards.length > 1 && (
-              <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Tablero activo
-                </p>
-                <select
-                  value={data.board.id}
-                  onChange={(event) => {
-                    const nextBoardId = event.target.value;
-                    setSelectedBoardId(nextBoardId);
-                    window.localStorage.setItem('activeBoardId', nextBoardId);
-                    setInviteError(null);
-                    setInviteSuccess(null);
-                  }}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none"
-                >
-                  {data.boards.map((boardOption) => (
-                    <option key={boardOption.id} value={boardOption.id}>
-                      {boardOption.name} ({boardOption.role})
-                    </option>
-                  ))}
-                </select>
-              </section>
-            )}
+            <p className="mb-6 text-lg font-semibold tracking-tight text-slate-900">
+              {data.board.name}
+            </p>
 
             <section className="mb-6">
               <div className="relative rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
@@ -1580,18 +1558,10 @@ function Dashboard() {
                   Administra tu cuenta y cierra sesión cuando lo necesites.
                 </p>
               </div>
-              <BoardLimitSettingsCard
-                value={spendingLimitInput}
-                onChange={setSpendingLimitInput}
-                onSave={() => {
-                  void saveSpendingLimit();
-                }}
-                onClear={() => {
-                  void clearSpendingLimit();
-                }}
-                saving={boardSettingsMutation.isPending}
-                successMessage={settingsSuccess}
-                errorMessage={settingsError}
+              <BoardSelectorCard
+                boards={data.boards}
+                activeBoardId={data.board.id}
+                onBoardTap={openBoardDetails}
               />
               {data.role !== 'viewer' && (
                 <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -1739,18 +1709,10 @@ function Dashboard() {
                   Ajusta el límite de gasto para este tablero.
                 </p>
               </div>
-              <BoardLimitSettingsCard
-                value={spendingLimitInput}
-                onChange={setSpendingLimitInput}
-                onSave={() => {
-                  void saveSpendingLimit();
-                }}
-                onClear={() => {
-                  void clearSpendingLimit();
-                }}
-                saving={boardSettingsMutation.isPending}
-                successMessage={settingsSuccess}
-                errorMessage={settingsError}
+              <BoardSelectorCard
+                boards={data.boards}
+                activeBoardId={data.board.id}
+                onBoardTap={openBoardDetails}
               />
               {data.role !== 'viewer' && (
                 <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -2113,6 +2075,154 @@ function Dashboard() {
                 >
                   Eliminar ingreso
                 </button>
+                <DrawerClose asChild>
+                  <button
+                    type="button"
+                    className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98]"
+                  >
+                    Cerrar
+                  </button>
+                </DrawerClose>
+              </>
+            )}
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer
+        open={isBoardDrawerOpen}
+        onOpenChange={handleBoardDrawerOpenChange}
+      >
+        <DrawerContent>
+          <DrawerHeader className="pb-2">
+            <DrawerTitle>Detalle del tablero</DrawerTitle>
+            <DrawerDescription>
+              Revisa los detalles de este tablero, selecciónalo o edítalo.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <div className="space-y-4 px-4 pb-2">
+            {!selectedBoardForDrawer ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No encontramos ese tablero. Cierra e intenta nuevamente.
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-2xl font-semibold tracking-tight text-slate-950">
+                  {selectedBoardForDrawer.name}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Rol:</span>{' '}
+                  {roleLabels[selectedBoardForDrawer.role] ??
+                    selectedBoardForDrawer.role}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">
+                    Límite de gasto:
+                  </span>{' '}
+                  {selectedBoardForDrawer.spendingLimitAmount
+                    ? currencyFormatter.format(
+                        Number(selectedBoardForDrawer.spendingLimitAmount),
+                      )
+                    : 'Sin límite'}
+                </p>
+                {selectedBoardForDrawer.id === data?.board.id && (
+                  <span className="inline-block rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-semibold text-white">
+                    Tablero activo
+                  </span>
+                )}
+              </div>
+            )}
+
+            {showDeleteBoardConfirm && selectedBoardForDrawer && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                Se eliminarán todos los gastos e ingresos de este tablero. Esta
+                acción no se puede deshacer.
+              </div>
+            )}
+
+            {boardActionError && (
+              <p className="rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">
+                {boardActionError}
+              </p>
+            )}
+          </div>
+
+          <DrawerFooter className="pb-8">
+            {!selectedBoardForDrawer ? (
+              <DrawerClose asChild>
+                <button
+                  type="button"
+                  className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white transition-all active:scale-[0.98]"
+                >
+                  Cerrar
+                </button>
+              </DrawerClose>
+            ) : showDeleteBoardConfirm ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void deleteSelectedBoard();
+                  }}
+                  disabled={deleteBoardMutation.isPending}
+                  className="w-full rounded-[20px] bg-rose-600 py-4 text-base font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  {deleteBoardMutation.isPending
+                    ? 'Eliminando...'
+                    : 'Sí, eliminar tablero'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteBoardConfirm(false);
+                    setBoardActionError(null);
+                  }}
+                  disabled={deleteBoardMutation.isPending}
+                  className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                {selectedBoardForDrawer.id !== data?.board.id && (
+                  <button
+                    type="button"
+                    onClick={selectBoardFromDrawer}
+                    className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white transition-all active:scale-[0.98]"
+                  >
+                    Seleccionar tablero
+                  </button>
+                )}
+                {selectedBoardForDrawer.role === 'owner' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate({
+                        to: `/boards/${selectedBoardForDrawer.id}/edit` as never,
+                      });
+                      handleBoardDrawerOpenChange(false);
+                    }}
+                    className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98]"
+                  >
+                    Editar tablero
+                  </button>
+                )}
+                {selectedBoardForDrawer.role === 'owner' &&
+                  data &&
+                  data.boards.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDeleteBoardConfirm(true);
+                        setBoardActionError(null);
+                      }}
+                      className="w-full rounded-[20px] border border-rose-300 bg-rose-50 py-4 text-base font-semibold text-rose-700 transition-all active:scale-[0.98]"
+                    >
+                      Eliminar tablero
+                    </button>
+                  )}
                 <DrawerClose asChild>
                   <button
                     type="button"
