@@ -21,7 +21,8 @@ export function Tabs({ tabs, initialTab = 0 }: TabsProps) {
       <div className="tabs-nav">
         {tabs.map((tab, index) => (
           <button
-            key={index}
+            key={tab.label}
+            type="button"
             onClick={() => setActiveTab(index)}
             className={`tab-nav-item ${
               activeTab === index

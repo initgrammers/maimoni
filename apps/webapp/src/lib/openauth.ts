@@ -1,4 +1,7 @@
-import { createOpenAuthClient, normalizeAuthIssuer } from '@maimoni/auth';
+import {
+  createOpenAuthClient,
+  normalizeAuthIssuer,
+} from '@maimoni/auth/client';
 
 type Challenge = {
   state: string;
@@ -48,7 +51,7 @@ function getClient() {
 }
 
 export async function startAuth(provider: 'anonymous' | 'whatsapp') {
-  const redirectUri = `${window.location.origin}/auth/callback`;
+  const redirectUri = `${window.location.origin}/callback/auth`;
   const { challenge, url } = await getClient().authorize(redirectUri, 'code', {
     provider,
     pkce: true,
@@ -70,7 +73,7 @@ export async function finishAuthFromCallback(search: URLSearchParams) {
   }
 
   const challenge = JSON.parse(challengeRaw) as Challenge;
-  const redirectUri = `${window.location.origin}/auth/callback`;
+  const redirectUri = `${window.location.origin}/callback/auth`;
   const exchanged = await getClient().exchange(
     code,
     redirectUri,

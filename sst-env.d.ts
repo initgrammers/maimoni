@@ -12,6 +12,10 @@ declare module "sst" {
       "url": string
     }
     "Auth": {
+      "publicKey": string
+      "type": "sst.aws.Auth"
+    }
+    "AuthAuthenticator": {
       "name": string
       "type": "sst.aws.Function"
       "url": string
@@ -23,6 +27,10 @@ declare module "sst" {
     "Webapp": {
       "type": "sst.aws.TanstackStart"
       "url": string
+    }
+    "authTable": {
+      "name": string
+      "type": "sst.aws.Dynamo"
     }
   }
 }

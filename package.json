@@ -17,7 +17,8 @@
     "@types/aws-lambda": "8.10.160",
     "@types/bun": "latest",
     "ion": "^1.0.1",
-    "lucide-react": "^0.564.0"
+    "lucide-react": "^0.564.0",
+    "patch-package": "^8.0.1"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -25,5 +26,8 @@
   "packageManager": "bun@1.0.0+",
   "dependencies": {
     "sst": "^3.18.5"
+  },
+  "patchedDependencies": {
+    "@openauthjs/openauth@0.4.3": "patches/@openauthjs%2Fopenauth@0.4.3.patch"
   }
 }

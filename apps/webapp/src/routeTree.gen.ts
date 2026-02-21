@@ -12,7 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as CallbackAuthRouteImport } from './routes/callback.auth'
 import { Route as AddIncomeRouteImport } from './routes/add.income'
 import { Route as IncomesIncomeIdEditRouteImport } from './routes/incomes.$incomeId.edit'
 import { Route as ExpensesExpenseIdEditRouteImport } from './routes/expenses.$expenseId.edit'
@@ -32,9 +32,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
+const CallbackAuthRoute = CallbackAuthRouteImport.update({
+  id: '/callback/auth',
+  path: '/callback/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AddIncomeRoute = AddIncomeRouteImport.update({
@@ -58,7 +58,7 @@ export interface FileRoutesByFullPath {
   '/add': typeof AddRouteWithChildren
   '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
-  '/auth/callback': typeof AuthCallbackRoute
+  '/callback/auth': typeof CallbackAuthRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
   '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
@@ -67,7 +67,7 @@ export interface FileRoutesByTo {
   '/add': typeof AddRouteWithChildren
   '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
-  '/auth/callback': typeof AuthCallbackRoute
+  '/callback/auth': typeof CallbackAuthRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
   '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
@@ -77,7 +77,7 @@ export interface FileRoutesById {
   '/add': typeof AddRouteWithChildren
   '/invite': typeof InviteRoute
   '/add/income': typeof AddIncomeRoute
-  '/auth/callback': typeof AuthCallbackRoute
+  '/callback/auth': typeof CallbackAuthRoute
   '/expenses/$expenseId/edit': typeof ExpensesExpenseIdEditRoute
   '/incomes/$incomeId/edit': typeof IncomesIncomeIdEditRoute
 }
@@ -88,7 +88,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/invite'
     | '/add/income'
-    | '/auth/callback'
+    | '/callback/auth'
     | '/expenses/$expenseId/edit'
     | '/incomes/$incomeId/edit'
   fileRoutesByTo: FileRoutesByTo
@@ -97,7 +97,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/invite'
     | '/add/income'
-    | '/auth/callback'
+    | '/callback/auth'
     | '/expenses/$expenseId/edit'
     | '/incomes/$incomeId/edit'
   id:
@@ -106,7 +106,7 @@ export interface FileRouteTypes {
     | '/add'
     | '/invite'
     | '/add/income'
-    | '/auth/callback'
+    | '/callback/auth'
     | '/expenses/$expenseId/edit'
     | '/incomes/$incomeId/edit'
   fileRoutesById: FileRoutesById
@@ -115,7 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRouteWithChildren
   InviteRoute: typeof InviteRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
+  CallbackAuthRoute: typeof CallbackAuthRoute
   ExpensesExpenseIdEditRoute: typeof ExpensesExpenseIdEditRoute
   IncomesIncomeIdEditRoute: typeof IncomesIncomeIdEditRoute
 }
@@ -143,11 +143,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
+    '/callback/auth': {
+      id: '/callback/auth'
+      path: '/callback/auth'
+      fullPath: '/callback/auth'
+      preLoaderRoute: typeof CallbackAuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/add/income': {
@@ -188,7 +188,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRouteWithChildren,
   InviteRoute: InviteRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
+  CallbackAuthRoute: CallbackAuthRoute,
   ExpensesExpenseIdEditRoute: ExpensesExpenseIdEditRoute,
   IncomesIncomeIdEditRoute: IncomesIncomeIdEditRoute,
 }

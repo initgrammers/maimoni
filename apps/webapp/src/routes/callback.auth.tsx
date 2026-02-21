@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { finishAuthFromCallback } from '../lib/openauth';
 
-export const Route = createFileRoute('/auth/callback' as never)({
+export const Route = createFileRoute('/callback/auth' as never)({
   component: AuthCallback,
 });
 

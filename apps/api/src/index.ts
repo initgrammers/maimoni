@@ -294,13 +294,13 @@ app.use('/api/*', async (c, next) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
+
   let verified: Awaited<
     ReturnType<typeof authClient.verify<typeof authSubjects>>
   >;
   try {
     verified = await authClient.verify(authSubjects, token);
-  } catch (error) {
-    console.error('OpenAuth verify failed', error);
+  } catch {
     return c.json({ error: 'Auth service unavailable' }, 503);
   }
 

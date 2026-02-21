@@ -8,7 +8,6 @@
     "@maimoni/ai": "workspace:*",
     "@maimoni/auth": "workspace:*",
     "@maimoni/db": "workspace:*",
-    "@openauthjs/openauth": "latest",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
     "valibot": "^1.2.0",

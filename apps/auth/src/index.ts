@@ -1,10 +1,13 @@
-import { authSubjects, subjectFromPhone } from '@maimoni/auth';
+import {
+  authSubjects,
+  CodeProvider,
+  CodeUI,
+  createStorage,
+  issuer,
+  type Provider,
+  subjectFromPhone,
+} from '@maimoni/auth';
 import { createClient, syncUser } from '@maimoni/db';
-import { issuer } from '@openauthjs/openauth';
-import { CodeProvider } from '@openauthjs/openauth/provider/code';
-import type { Provider } from '@openauthjs/openauth/provider/provider';
-import { MemoryStorage } from '@openauthjs/openauth/storage/memory';
-import { CodeUI } from '@openauthjs/openauth/ui/code';
 import { handle } from 'hono/aws-lambda';
 import twilio from 'twilio';
 import { getEnv } from '../../../packages/utils/src/index';
@@ -47,10 +50,12 @@ function toEcuadorPhoneNumber(input: string) {
   return `+593${local}`;
 }
 
-const authIssuer = issuer({
-  storage: MemoryStorage({
-    persist: '/tmp/openauth-store.json',
-  }),
+
+const storage = createStorage(JSON.parse(getEnv('AUTH_STORAGE')));
+
+const issuerApp = issuer({
+  storage,
+  basePath: '/auth',
   subjects: authSubjects,
   providers: {
     anonymous: AnonymousProvider(),
@@ -115,4 +120,5 @@ const authIssuer = issuer({
   },
 });
 
-export const handler = handle(authIssuer);
+
+export const handler = handle(issuerApp);

@@ -1,0 +1,185 @@
+diff --git a/dist/esm/issuer.js b/dist/esm/issuer.js
+index 1b18009bfeaa09f2222e9df760dde0e4eb1d4326..fb005d6f6280e404799b0d8f81ca20026551068e 100644
+--- a/dist/esm/issuer.js
++++ b/dist/esm/issuer.js
+@@ -36,6 +36,8 @@ function issuer(input) {
+   if (input.theme) {
+     setTheme(input.theme);
+   }
++  const rawBasePath = input.basePath;
++  const basePath = !rawBasePath || rawBasePath === "/" ? "" : `/${rawBasePath.replace(/^\/+|\/+$/g, "")}`;
+   const select = lazy(() => input.select ?? Select());
+   const allow = lazy(() => input.allow ?? (async (input2, req) => {
+     const redir = new URL(input2.redirectURI).hostname;
+@@ -195,7 +197,8 @@ function issuer(input) {
+     return JSON.parse(new TextDecoder().decode(await compactDecrypt(value, await encryptionKey().then((v) => v.private)).then((value2) => value2.plaintext)));
+   }
+   function issuer2(ctx) {
+-    return new URL(getRelativeUrl(ctx, "/")).origin;
++    const url = new URL(getRelativeUrl(ctx, "/"));
++    return url.origin + basePath;
+   }
+   const app = new Hono().use(logger());
+   for (const [name, value] of Object.entries(input.providers)) {
+@@ -208,9 +211,9 @@ function issuer(input) {
+       name,
+       ...auth
+     });
+-    app.route(`/${name}`, route);
++    app.route(`${basePath}/${name}`, route);
+   }
+-  app.get("/.well-known/jwks.json", cors({
++  app.get(`${basePath}/.well-known/jwks.json`, cors({
+     origin: "*",
+     allowHeaders: ["*"],
+     allowMethods: ["GET"],
+@@ -225,7 +228,7 @@ function issuer(input) {
+       }))
+     });
+   });
+-  app.get("/.well-known/oauth-authorization-server", cors({
++  app.get(`${basePath}/.well-known/oauth-authorization-server`, cors({
+     origin: "*",
+     allowHeaders: ["*"],
+     allowMethods: ["GET"],
+@@ -240,7 +243,7 @@ function issuer(input) {
+       response_types_supported: ["code", "token"]
+     });
+   });
+-  app.post("/token", cors({
++  app.post(`${basePath}/token`, cors({
+     origin: "*",
+     allowHeaders: ["*"],
+     allowMethods: ["POST"],
+@@ -381,7 +384,7 @@ function issuer(input) {
+     }
+     throw new Error("Invalid grant_type");
+   });
+-  app.get("/authorize", async (c) => {
++  app.get(`${basePath}/authorize`, async (c) => {
+     const provider = c.req.query("provider");
+     const response_type = c.req.query("response_type");
+     const redirect_uri = c.req.query("redirect_uri");
+@@ -422,10 +425,10 @@ function issuer(input) {
+       throw new UnauthorizedClientError(client_id, redirect_uri);
+     await auth.set(c, "authorization", 60 * 60 * 24, authorization);
+     if (provider)
+-      return c.redirect(`/${provider}/authorize`);
++      return c.redirect(`${basePath}/${provider}/authorize`);
+     const providers = Object.keys(input.providers);
+     if (providers.length === 1)
+-      return c.redirect(`/${providers[0]}/authorize`);
++      return c.redirect(`${basePath}/${providers[0]}/authorize`);
+     return auth.forward(c, await select()(Object.fromEntries(Object.entries(input.providers).map(([key, value]) => [
+       key,
+       value.type
+diff --git a/dist/types/issuer.d.ts b/dist/types/issuer.d.ts
+index 904bb5a4c84e7ebd410cdcfd2fb43bb30aa93549..028562f95015b51c7682ffeebeb2f8c31500bc76 100644
+--- a/dist/types/issuer.d.ts
++++ b/dist/types/issuer.d.ts
+@@ -397,6 +397,7 @@ export interface IssuerInput<Providers extends Record<string, Provider<any>>, Su
+         redirectURI: string;
+         audience?: string;
+     }, req: Request): Promise<boolean>;
++    basePath?: string;
+ }
+ /**
+  * Create an OpenAuth server, a Hono app.
+diff --git a/dist/types/issuer.d.ts.map b/dist/types/issuer.d.ts.map
+index e72cc33edc482b42e58aa0319004430833c97740..5bfa282b3a289bfb7f63cb7ce3947d8f2b03a3bb 100644
+--- a/dist/types/issuer.d.ts.map
++++ b/dist/types/issuer.d.ts.map
+@@ -1 +1 @@
+-{"version":3,"file":"issuer.d.ts","sourceRoot":"","sources":["../../src/issuer.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
++{"version":3,"file":"issuer.d.ts","sourceRoot":"","sources":["../../src/issuer.ts"],"names":[],"mappings":"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"}
+\ No newline at end of file
+diff --git a/src/issuer.ts b/src/issuer.ts
+index 119a99a278d3fe05cab32c8e326a29fc848f0f6b..52d1d7a1c371200544cacf92d8e7510c64ba81c5 100644
+--- a/src/issuer.ts
++++ b/src/issuer.ts
+@@ -435,6 +435,7 @@ export interface IssuerInput<
+     },
+     req: Request,
+   ): Promise<boolean>
++  basePath?: string
+ }
+ 
+ /**
+@@ -469,6 +470,12 @@ export function issuer<
+     setTheme(input.theme)
+   }
+ 
++  const rawBasePath = input.basePath
++  const basePath =
++    !rawBasePath || rawBasePath === "/"
++      ? ""
++      : `/${rawBasePath.replace(/^\/+|\/+$/g, "")}`
++
+   const select = lazy(() => input.select ?? Select())
+   const allow = lazy(
+     () =>
+@@ -721,7 +728,8 @@ export function issuer<
+   }
+ 
+   function issuer(ctx: Context) {
+-    return new URL(getRelativeUrl(ctx, "/")).origin
++    const url = new URL(getRelativeUrl(ctx, "/"))
++    return url.origin + basePath
+   }
+ 
+   const app = new Hono<{
+@@ -740,11 +748,11 @@ export function issuer<
+       name,
+       ...auth,
+     })
+-    app.route(`/${name}`, route)
++    app.route(`${basePath}/${name}`, route)
+   }
+ 
+   app.get(
+-    "/.well-known/jwks.json",
++    `${basePath}/.well-known/jwks.json`,
+     cors({
+       origin: "*",
+       allowHeaders: ["*"],
+@@ -766,7 +774,7 @@ export function issuer<
+   )
+ 
+   app.get(
+-    "/.well-known/oauth-authorization-server",
++    `${basePath}/.well-known/oauth-authorization-server`,
+     cors({
+       origin: "*",
+       allowHeaders: ["*"],
+@@ -786,7 +794,7 @@ export function issuer<
+   )
+ 
+   app.post(
+-    "/token",
++    `${basePath}/token`,
+     cors({
+       origin: "*",
+       allowHeaders: ["*"],
+@@ -1008,7 +1016,7 @@ export function issuer<
+     },
+   )
+ 
+-  app.get("/authorize", async (c) => {
++  app.get(`${basePath}/authorize`, async (c) => {
+     const provider = c.req.query("provider")
+     const response_type = c.req.query("response_type")
+     const redirect_uri = c.req.query("redirect_uri")
+@@ -1061,9 +1069,10 @@ export function issuer<
+     )
+       throw new UnauthorizedClientError(client_id, redirect_uri)
+     await auth.set(c, "authorization", 60 * 60 * 24, authorization)
+-    if (provider) return c.redirect(`/${provider}/authorize`)
++    if (provider) return c.redirect(`${basePath}/${provider}/authorize`)
+     const providers = Object.keys(input.providers)
+-    if (providers.length === 1) return c.redirect(`/${providers[0]}/authorize`)
++    if (providers.length === 1)
++      return c.redirect(`${basePath}/${providers[0]}/authorize`)
+     return auth.forward(
+       c,
+       await select()(
