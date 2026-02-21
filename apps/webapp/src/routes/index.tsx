@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { House, Plus, Settings, TrendingUp, User } from 'lucide-react';
+import {
+  BarChart3,
+  House,
+  Plus,
+  Settings,
+  TrendingUp,
+  User,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Drawer,
@@ -86,7 +93,7 @@ type DisplayMovement = {
 };
 
 type Period = 'week' | 'month' | 'year';
-type DashboardView = 'dashboard' | 'profile' | 'settings';
+type DashboardView = 'dashboard' | 'stats' | 'profile' | 'settings';
 type PigMood = 'sin_datos' | 'zen' | 'fuerte' | 'alerta' | 'urgencia';
 
 function getMovementDateLabel(date: Date) {
@@ -368,7 +375,7 @@ function Dashboard() {
   const [claimRequestKey, setClaimRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>('week');
+  const [statsPeriod, setStatsPeriod] = useState<Period>('week');
   const [view, setView] = useState<DashboardView>('dashboard');
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -702,35 +709,14 @@ function Dashboard() {
     [],
   );
 
-  const periodMovements = useMemo(() => {
+  const dashboardMovements = useMemo(() => {
     const now = new Date();
-    if (period === 'year') {
-      return movements.filter(
-        (movement) => movement.date.getFullYear() === now.getFullYear(),
-      );
-    }
-
-    if (period === 'month') {
-      return movements.filter(
-        (movement) =>
-          movement.date.getFullYear() === now.getFullYear() &&
-          movement.date.getMonth() === now.getMonth(),
-      );
-    }
-
-    const day = now.getDay();
-    const diffToMonday = day === 0 ? 6 : day - 1;
-    const startOfWeek = new Date(now);
-    startOfWeek.setHours(0, 0, 0, 0);
-    startOfWeek.setDate(now.getDate() - diffToMonday);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 7);
-
     return movements.filter(
-      (movement) => movement.date >= startOfWeek && movement.date < endOfWeek,
+      (movement) =>
+        movement.date.getFullYear() === now.getFullYear() &&
+        movement.date.getMonth() === now.getMonth(),
     );
-  }, [movements, period]);
+  }, [movements]);
 
   const groupedMovements = useMemo(() => {
     type Group = {
@@ -741,7 +727,7 @@ function Dashboard() {
 
     const grouped: Record<string, Group> = {};
 
-    for (const movement of periodMovements) {
+    for (const movement of dashboardMovements) {
       const key = movement.date.toDateString();
       if (grouped[key]) {
         grouped[key].movements.push(movement);
@@ -757,9 +743,9 @@ function Dashboard() {
     return Object.values(grouped)
       .sort((a, b) => b.date.getTime() - a.date.getTime())
       .map((group) => [group.label, group.movements] as const);
-  }, [periodMovements]);
+  }, [dashboardMovements]);
 
-  const periodExpenses = useMemo(() => {
+  const statsPeriodExpenses = useMemo(() => {
     const now = new Date();
     const monthLabels = [
       'Ene',
@@ -776,7 +762,7 @@ function Dashboard() {
       'Dic',
     ];
 
-    if (period === 'week') {
+    if (statsPeriod === 'week') {
       const day = now.getDay();
       const diffToMonday = day === 0 ? 6 : day - 1;
 
@@ -826,7 +812,7 @@ function Dashboard() {
       };
     }
 
-    if (period === 'month') {
+    if (statsPeriod === 'month') {
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth();
       const previousMonthDate = new Date(currentYear, currentMonth - 1, 1);
@@ -894,15 +880,91 @@ function Dashboard() {
       previousTotal,
       summaryLabel: 'año',
     };
-  }, [movements, period]);
+  }, [movements, statsPeriod]);
 
-  const periodChange = useMemo(() => {
-    const { currentTotal, previousTotal } = periodExpenses;
+  const statsPeriodChange = useMemo(() => {
+    const { currentTotal, previousTotal } = statsPeriodExpenses;
     if (previousTotal === 0) {
       return currentTotal > 0 ? 100 : 0;
     }
     return ((currentTotal - previousTotal) / previousTotal) * 100;
-  }, [periodExpenses]);
+  }, [statsPeriodExpenses]);
+
+  const statsCategoryBreakdown = useMemo(() => {
+    const now = new Date();
+    let periodExpenses: DisplayMovement[] = [];
+
+    if (statsPeriod === 'week') {
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      const startOfWeek = new Date(now);
+      startOfWeek.setHours(0, 0, 0, 0);
+      startOfWeek.setDate(now.getDate() - diffToMonday);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+      periodExpenses = movements.filter(
+        (m) =>
+          m.type === 'expense' && m.date >= startOfWeek && m.date < endOfWeek,
+      );
+    } else if (statsPeriod === 'month') {
+      periodExpenses = movements.filter(
+        (m) =>
+          m.type === 'expense' &&
+          m.date.getFullYear() === now.getFullYear() &&
+          m.date.getMonth() === now.getMonth(),
+      );
+    } else {
+      periodExpenses = movements.filter(
+        (m) =>
+          m.type === 'expense' && m.date.getFullYear() === now.getFullYear(),
+      );
+    }
+
+    const categoryTotals: Record<
+      string,
+      { name: string; emoji: string; total: number; color: string }
+    > = {};
+
+    const colors = [
+      '#3b82f6',
+      '#10b981',
+      '#f59e0b',
+      '#ef4444',
+      '#8b5cf6',
+      '#ec4899',
+      '#06b6d4',
+      '#84cc16',
+    ];
+
+    let colorIndex = 0;
+
+    for (const expense of periodExpenses) {
+      const key = expense.categoryName;
+      if (categoryTotals[key]) {
+        categoryTotals[key].total += expense.amount;
+      } else {
+        categoryTotals[key] = {
+          name: expense.categoryName,
+          emoji: expense.categoryEmoji,
+          total: expense.amount,
+          color: colors[colorIndex % colors.length],
+        };
+        colorIndex++;
+      }
+    }
+
+    const totalExpense = periodExpenses.reduce((sum, m) => sum + m.amount, 0);
+
+    const categories = Object.values(categoryTotals)
+      .sort((a, b) => b.total - a.total)
+      .map((cat) => ({
+        ...cat,
+        percentage: totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0,
+      }));
+
+    return { categories, totalExpense };
+  }, [movements, statsPeriod]);
 
   const monthlyExpenseTotal = useMemo(() => {
     const now = new Date();
@@ -914,6 +976,60 @@ function Dashboard() {
           movement.date.getMonth() === now.getMonth(),
       )
       .reduce((sum, movement) => sum + movement.amount, 0);
+  }, [movements]);
+
+  const monthlyIncomeTotal = useMemo(() => {
+    const now = new Date();
+    return movements
+      .filter(
+        (movement) =>
+          movement.type === 'income' &&
+          movement.date.getFullYear() === now.getFullYear() &&
+          movement.date.getMonth() === now.getMonth(),
+      )
+      .reduce((sum, movement) => sum + movement.amount, 0);
+  }, [movements]);
+
+  const netBalance = useMemo(() => {
+    return monthlyIncomeTotal - monthlyExpenseTotal;
+  }, [monthlyIncomeTotal, monthlyExpenseTotal]);
+
+  const topMonthlyCategories = useMemo(() => {
+    const now = new Date();
+    const monthlyExpenses = movements.filter(
+      (m) =>
+        m.type === 'expense' &&
+        m.date.getFullYear() === now.getFullYear() &&
+        m.date.getMonth() === now.getMonth(),
+    );
+
+    const categoryTotals: Record<
+      string,
+      { name: string; emoji: string; total: number }
+    > = {};
+
+    for (const expense of monthlyExpenses) {
+      const key = expense.categoryName;
+      if (categoryTotals[key]) {
+        categoryTotals[key].total += expense.amount;
+      } else {
+        categoryTotals[key] = {
+          name: expense.categoryName,
+          emoji: expense.categoryEmoji,
+          total: expense.amount,
+        };
+      }
+    }
+
+    const totalExpense = monthlyExpenses.reduce((sum, m) => sum + m.amount, 0);
+
+    return Object.values(categoryTotals)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 3)
+      .map((cat) => ({
+        ...cat,
+        percentage: totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0,
+      }));
   }, [movements]);
 
   const monthlyLimit = useMemo(() => {
@@ -1332,77 +1448,42 @@ function Dashboard() {
             </p>
 
             <section className="mb-6">
-              <div className="relative rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+              <div
+                className={`relative rounded-[28px] border px-5 py-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ${
+                  netBalance >= 0
+                    ? 'border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 shadow-[0_12px_30px_rgba(16,185,129,0.12)]'
+                    : 'border-rose-100 bg-gradient-to-br from-rose-50 via-white to-pink-50 shadow-[0_12px_30px_rgba(244,63,94,0.12)]'
+                }`}
+              >
                 {isRefreshingDashboard && (
-                  <div className="absolute right-4 top-4 h-5 w-5 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
-                )}
-                <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
-                  {currencyFormatter.format(periodExpenses.currentTotal)}
-                </p>
-                <p className="flex items-center gap-2 text-base text-slate-400">
-                  {`Total gastado este ${periodExpenses.summaryLabel}`}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
-                      periodChange >= 0
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-rose-100 text-rose-700'
+                  <div
+                    className={`absolute right-4 top-4 h-5 w-5 rounded-full border-2 animate-spin ${
+                      netBalance >= 0
+                        ? 'border-emerald-200 border-t-emerald-700'
+                        : 'border-rose-200 border-t-rose-700'
                     }`}
-                  >
-                    {periodChange >= 0 ? '↑' : '↓'}{' '}
-                    {Math.abs(periodChange).toFixed(0)}%
-                  </span>
-                </p>
-
-                <div
-                  className="mt-7 grid items-end gap-2"
-                  style={{
-                    gridTemplateColumns: `repeat(${periodExpenses.labels.length}, minmax(0, 1fr))`,
-                  }}
-                >
-                  {periodExpenses.dayTotals.map((amount, index) => (
-                    <div
-                      key={periodExpenses.labels[index]}
-                      className="text-center"
-                    >
-                      <div className="mx-auto mb-2 flex h-28 w-full items-end overflow-hidden rounded-xl bg-slate-100">
-                        <div
-                          className="w-full rounded-xl bg-slate-900 transition-all duration-300"
-                          style={{
-                            height: `${Math.max(
-                              12,
-                              (amount / periodExpenses.highest) * 100,
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="text-xs font-medium text-slate-400">
-                        {periodExpenses.labels[index]}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
-                  {(['week', 'month', 'year'] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setPeriod(option);
-                      }}
-                      className={`flex-1 rounded-xl px-2 py-2 capitalize transition-colors ${
-                        period === option
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-400'
+                  />
+                )}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p
+                      className={`text-sm font-semibold uppercase tracking-wide ${
+                        netBalance >= 0 ? 'text-emerald-700' : 'text-rose-700'
                       }`}
                     >
-                      {option === 'week'
-                        ? 'Semana'
-                        : option === 'month'
-                          ? 'Mes'
-                          : 'Año'}
-                    </button>
-                  ))}
+                      Balance Neto
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Ingresos - Gastos del mes
+                    </p>
+                  </div>
+                  <p
+                    className={`text-3xl font-semibold tracking-tight ${
+                      netBalance >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                    }`}
+                  >
+                    {currencyFormatter.format(netBalance)}
+                  </p>
                 </div>
               </div>
             </section>
@@ -1463,6 +1544,33 @@ function Dashboard() {
                 </div>
               </div>
             </section>
+
+            {topMonthlyCategories.length > 0 && (
+              <section className="mb-6">
+                <p className="mb-3 text-sm font-medium text-slate-500">
+                  Top categorías del mes
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  {topMonthlyCategories.map((category) => (
+                    <div
+                      key={category.name}
+                      className="flex flex-col items-center rounded-2xl border border-slate-200 bg-white px-3 py-4 shadow-sm"
+                    >
+                      <span className="mb-1 text-3xl">{category.emoji}</span>
+                      <p className="text-center text-xs font-medium text-slate-700">
+                        {category.name}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        {currencyFormatter.format(category.total)}
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-slate-400">
+                        {category.percentage.toFixed(0)}%
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <main className="relative pb-3">
               {isRefreshingDashboard && (
@@ -1544,6 +1652,202 @@ function Dashboard() {
             </main>
 
             {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+          </>
+        )}
+
+        {view === 'stats' && (
+          <>
+            <p className="mb-6 text-lg font-semibold tracking-tight text-slate-900">
+              Estadísticas
+            </p>
+
+            <section className="mb-6">
+              <div className="relative rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+                {isRefreshingDashboard && (
+                  <div className="absolute right-4 top-4 h-5 w-5 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
+                )}
+                <p className="mb-2 text-4xl font-semibold tracking-tight text-slate-950">
+                  {currencyFormatter.format(statsPeriodExpenses.currentTotal)}
+                </p>
+                <p className="flex items-center gap-2 text-base text-slate-400">
+                  {`Total gastado este ${statsPeriodExpenses.summaryLabel}`}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-sm font-semibold ${
+                      statsPeriodChange >= 0
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-rose-100 text-rose-700'
+                    }`}
+                  >
+                    {statsPeriodChange >= 0 ? '↑' : '↓'}{' '}
+                    {Math.abs(statsPeriodChange).toFixed(0)}%
+                  </span>
+                </p>
+
+                <div
+                  className="mt-7 grid items-end gap-2"
+                  style={{
+                    gridTemplateColumns: `repeat(${statsPeriodExpenses.labels.length}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {statsPeriodExpenses.dayTotals.map((amount, index) => (
+                    <div
+                      key={statsPeriodExpenses.labels[index]}
+                      className="text-center"
+                    >
+                      <div className="mx-auto mb-2 flex h-28 w-full items-end overflow-hidden rounded-xl bg-slate-100">
+                        <div
+                          className="w-full rounded-xl bg-slate-900 transition-all duration-300"
+                          style={{
+                            height: `${Math.max(
+                              12,
+                              (amount / statsPeriodExpenses.highest) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs font-medium text-slate-400">
+                        {statsPeriodExpenses.labels[index]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
+                  {(['week', 'month', 'year'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        setStatsPeriod(option);
+                      }}
+                      className={`flex-1 rounded-xl px-2 py-2 capitalize transition-colors ${
+                        statsPeriod === option
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {option === 'week'
+                        ? 'Semana'
+                        : option === 'month'
+                          ? 'Mes'
+                          : 'Año'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {statsCategoryBreakdown.categories.length > 0 && (
+              <section className="mb-6">
+                <div className="relative rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+                  {isRefreshingDashboard && (
+                    <div className="absolute right-4 top-4 h-5 w-5 rounded-full border-2 border-slate-200 border-t-slate-700 animate-spin" />
+                  )}
+                  <p className="mb-4 text-sm font-medium text-slate-500">
+                    Distribución por categoría
+                  </p>
+
+                  <div className="flex flex-col items-center">
+                    <div className="relative h-48 w-48">
+                      <svg
+                        viewBox="0 0 100 100"
+                        className="h-full w-full -rotate-90"
+                      >
+                        <title>Distribución de gastos por categoría</title>
+                        {(() => {
+                          const categories = statsCategoryBreakdown.categories;
+
+                          if (categories.length === 1) {
+                            return (
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                fill={categories[0].color}
+                                stroke="white"
+                                strokeWidth="2"
+                              />
+                            );
+                          }
+
+                          let accumulatedAngle = 0;
+                          return categories.map((cat) => {
+                            const angle = (cat.percentage / 100) * 360;
+                            const startAngle = accumulatedAngle;
+                            accumulatedAngle += angle;
+                            const endAngle = accumulatedAngle;
+
+                            const startRad = (startAngle * Math.PI) / 180;
+                            const endRad = (endAngle * Math.PI) / 180;
+
+                            const x1 = 50 + 40 * Math.cos(startRad);
+                            const y1 = 50 + 40 * Math.sin(startRad);
+                            const x2 = 50 + 40 * Math.cos(endRad);
+                            const y2 = 50 + 40 * Math.sin(endRad);
+
+                            const largeArcFlag = angle > 180 ? 1 : 0;
+
+                            const pathData = [
+                              `M 50 50`,
+                              `L ${x1} ${y1}`,
+                              `A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                              `Z`,
+                            ].join(' ');
+
+                            return (
+                              <path
+                                key={cat.name}
+                                d={pathData}
+                                fill={cat.color}
+                                stroke="white"
+                                strokeWidth="2"
+                              />
+                            );
+                          });
+                        })()}
+                        <circle cx="50" cy="50" r="20" fill="white" />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-lg font-semibold text-slate-900">
+                          {currencyFormatter.format(
+                            statsCategoryBreakdown.totalExpense,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 w-full space-y-3">
+                      {statsCategoryBreakdown.categories.map((cat) => (
+                        <div
+                          key={cat.name}
+                          className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
+                              style={{ backgroundColor: `${cat.color}20` }}
+                            >
+                              {cat.emoji}
+                            </span>
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {cat.name}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {cat.percentage.toFixed(1)}% del total
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {currencyFormatter.format(cat.total)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
           </>
         )}
 
@@ -2237,8 +2541,8 @@ function Dashboard() {
         </DrawerContent>
       </Drawer>
 
-      <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-8 py-6 backdrop-blur">
-        <div className="mx-auto grid w-full max-w-md grid-cols-3 items-center">
+      <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-6 py-6 backdrop-blur">
+        <div className="mx-auto grid w-full max-w-md grid-cols-5 items-center">
           <button
             type="button"
             onClick={() => setView('dashboard')}
@@ -2252,7 +2556,7 @@ function Dashboard() {
             <House className="h-6 w-6" />
           </button>
 
-          <div className="flex items-center justify-center gap-3">
+          <div className="col-span-3 flex items-center justify-center gap-3">
             <Link
               to="/add/income"
               search={(current) => current}
@@ -2273,25 +2577,40 @@ function Dashboard() {
             </Link>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setView(anonymousId ? 'settings' : 'profile');
-            }}
-            className={`justify-self-end flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
-              (anonymousId && view === 'settings') ||
-              (!anonymousId && view === 'profile')
-                ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
-                : 'border-transparent text-slate-400 hover:bg-slate-50'
-            }`}
-            aria-label={anonymousId ? 'Ver configuración' : 'Ver perfil'}
-          >
-            {anonymousId ? (
-              <Settings className="h-6 w-6" />
-            ) : (
-              <User className="h-6 w-6" />
-            )}
-          </button>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setView('stats')}
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
+                view === 'stats'
+                  ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                  : 'border-transparent text-slate-400 hover:bg-slate-50'
+              }`}
+              aria-label="Ver estadísticas"
+            >
+              <BarChart3 className="h-6 w-6" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setView(anonymousId ? 'settings' : 'profile');
+              }}
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all active:scale-95 ${
+                (anonymousId && view === 'settings') ||
+                (!anonymousId && view === 'profile')
+                  ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                  : 'border-transparent text-slate-400 hover:bg-slate-50'
+              }`}
+              aria-label={anonymousId ? 'Ver configuración' : 'Ver perfil'}
+            >
+              {anonymousId ? (
+                <Settings className="h-6 w-6" />
+              ) : (
+                <User className="h-6 w-6" />
+              )}
+            </button>
+          </div>
         </div>
       </nav>
     </div>
