@@ -1393,14 +1393,38 @@ function Dashboard() {
   if (!data) {
     if (dashboardQuery.error || error) {
       return (
-        <DashboardLoading
-          title="No pudimos cargar tu tablero"
-          description={
-            error ??
-            dashboardQuery.error?.message ??
-            'Intenta nuevamente en unos segundos.'
-          }
-        />
+        <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
+          <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center justify-center">
+            <div className="w-full rounded-[28px] border border-slate-200 bg-white px-6 py-8 text-center shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <p className="text-lg font-semibold tracking-tight text-slate-900">
+                No pudimos cargar tu tablero
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                {error ??
+                  dashboardQuery.error?.message ??
+                  'Intenta nuevamente en unos segundos.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  window.localStorage.removeItem('accessToken');
+                  window.localStorage.removeItem('refreshToken');
+                  window.localStorage.removeItem('anonymousId');
+                  window.localStorage.removeItem('pendingClaimAnonymousId');
+                  window.localStorage.removeItem('auth_challenge');
+                  window.localStorage.removeItem('activeBoardId');
+                  window.location.reload();
+                }}
+                className="mt-6 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-all active:scale-95"
+              >
+                Cerrar sesión y volver a intentar
+              </button>
+            </div>
+          </div>
+        </div>
       );
     }
 
