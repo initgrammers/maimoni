@@ -1,0 +1,33 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Bun monorepo, SST Ion (AWS), TanStack Start, Hono API
+  Architecture: Serverless with Cloudflare Workers, WhatsApp/Twilio auth
+  Database: Drizzle ORM with PostgreSQL
+  AI: LlamaIndex + Groq for receipt scanning
+  Testing: Bun test, Playwright E2E
+  Style: Biome (lint/format), no ESLint/Prettier
+  Conventions: @/ alias (webapp), @maimoni/* workspace refs, getEnv for env vars
+
+rules:
+  proposal:
+    - Include rollback plan for risky infrastructure changes
+    - Identify affected apps (api/auth/webapp) and packages (ai/db/utils)
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for WhatsApp auth flows
+    - Document SST infrastructure decisions
+  tasks:
+    - Group by app/package boundaries
+    - Database changes MUST include drizzle-kit generate step
+  apply:
+    - Follow existing Hono/TanStack patterns
+    - Use getEnv from packages/utils for all env access
+  verify:
+    - Run bun run check before completing
+    - Test database migrations are idempotent
+  archive:
+    - Warn before merging destructive schema changes
