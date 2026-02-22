@@ -345,7 +345,6 @@ function AddIncome() {
             ref={fileInputRef}
             type="file"
             accept="image/*,application/pdf"
-            capture="environment"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -367,7 +366,7 @@ function AddIncome() {
             ) : (
               <>
                 <Camera className="h-5 w-5" />
-                Escanear recibo
+                Escanear
               </>
             )}
           </button>
