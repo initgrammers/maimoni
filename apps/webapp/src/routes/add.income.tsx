@@ -366,10 +366,10 @@ function AddIncome() {
           onSubmit={handleSubmit}
           className="mx-auto w-full max-w-md px-5 space-y-6 pb-4"
         >
-          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <div className="space-y-2 rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <label
               htmlFor={dateInputId}
-              className="block text-sm font-semibold uppercase tracking-wider text-slate-500"
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-500"
             >
               Fecha
             </label>
@@ -377,7 +377,7 @@ function AddIncome() {
               <DrawerTrigger asChild>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-left text-slate-900 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-slate-900 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
                 >
                   <span className="font-medium">
                     {date
@@ -455,7 +455,7 @@ function AddIncome() {
               Monto
             </label>
             <div className="relative">
-              <span className="absolute left-5 top-1/2 -translate-y-1/2 text-3xl font-bold text-slate-400">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">
                 $
               </span>
               <input
@@ -466,13 +466,13 @@ function AddIncome() {
                 onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                 placeholder="0.00"
                 required
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 py-5 text-3xl font-semibold text-slate-900 placeholder:text-slate-300 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-3 text-2xl font-semibold text-slate-900 placeholder:text-slate-300 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
               />
             </div>
           </div>
 
-          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+          <div className="space-y-2 rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Categoría
             </p>
             {!showCategories && !selectedCategory && (
@@ -480,7 +480,7 @@ function AddIncome() {
                 type="button"
                 onClick={() => setShowCategories(true)}
                 disabled={isCategoriesLoading}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-left font-medium text-slate-500 transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 {isCategoriesLoading ? 'Cargando...' : 'Seleccionar categoría'}
               </button>
@@ -492,15 +492,15 @@ function AddIncome() {
                   setShowCategories(true);
                 }}
                 disabled={isCategoriesLoading}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-slate-50 p-4 transition-all active:scale-[0.98] disabled:opacity-50"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{selectedCategory.emoji}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{selectedCategory.emoji}</span>
                   <span className="font-semibold text-slate-800">
                     {selectedCategory.name}
                   </span>
                 </div>
-                <Check className="h-5 w-5 text-slate-500" />
+                <Check className="h-4 w-4 text-slate-500" />
               </button>
             )}
             {showCategories && (
@@ -523,14 +523,14 @@ function AddIncome() {
                         setSelectedSubcategory(null);
                         setShowCategories(false);
                       }}
-                      className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
+                      className={`flex w-full items-center gap-2 rounded-xl border p-3 transition-all active:scale-[0.98] ${
                         selectedCategory?.id === category.id
                           ? 'border-slate-300 bg-slate-100'
                           : 'border-slate-200 bg-white hover:bg-slate-50'
                       }`}
                     >
-                      <span className="text-2xl">{category.emoji}</span>
-                      <span className="font-semibold text-slate-800">
+                      <span className="text-xl">{category.emoji}</span>
+                      <span className="font-medium text-slate-800">
                         {category.name}
                       </span>
                     </button>
@@ -542,15 +542,15 @@ function AddIncome() {
 
           {selectedCategory?.subcategories &&
             selectedCategory.subcategories.length > 0 && (
-              <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-                <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <div className="space-y-2 rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Subcategoría (opcional)
                 </p>
                 {!showSubcategories && !selectedSubcategory && (
                   <button
                     type="button"
                     onClick={() => setShowSubcategories(true)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left font-medium text-slate-500 transition-all active:scale-[0.98]"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-left font-medium text-slate-500 transition-all active:scale-[0.98]"
                   >
                     Seleccionar subcategoría
                   </button>
@@ -559,30 +559,30 @@ function AddIncome() {
                   <button
                     type="button"
                     onClick={() => setShowSubcategories(true)}
-                    className="flex w-full items-center justify-between rounded-2xl border border-slate-300 bg-slate-50 p-5 transition-all active:scale-[0.98]"
+                    className="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-slate-50 p-4 transition-all active:scale-[0.98]"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">
                         {selectedSubcategory.emoji}
                       </span>
                       <span className="font-semibold text-slate-800">
                         {selectedSubcategory.name}
                       </span>
                     </div>
-                    <Check className="h-5 w-5 text-slate-500" />
+                    <Check className="h-4 w-4 text-slate-500" />
                   </button>
                 )}
                 {showSubcategories && (
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedSubcategory(null);
                         setShowSubcategories(false);
                       }}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-slate-200 p-4 transition-all hover:bg-slate-50 active:scale-[0.98]"
+                      className="flex w-full items-center gap-2 rounded-xl border border-dashed border-slate-200 p-3 transition-all hover:bg-slate-50 active:scale-[0.98]"
                     >
-                      <span className="text-xl">✨</span>
+                      <span className="text-lg">✨</span>
                       <span className="font-medium text-slate-500">
                         Ninguna ({selectedCategory.name})
                       </span>
@@ -595,14 +595,14 @@ function AddIncome() {
                           setSelectedSubcategory(sub);
                           setShowSubcategories(false);
                         }}
-                        className={`flex w-full items-center gap-3 rounded-2xl border p-4 transition-all active:scale-[0.98] ${
+                        className={`flex w-full items-center gap-2 rounded-xl border p-3 transition-all active:scale-[0.98] ${
                           selectedSubcategory?.id === sub.id
                             ? 'border-slate-300 bg-slate-100'
                             : 'border-slate-200 bg-white hover:bg-slate-50'
                         }`}
                       >
-                        <span className="text-xl">{sub.emoji}</span>
-                        <span className="font-semibold text-slate-800">
+                        <span className="text-lg">{sub.emoji}</span>
+                        <span className="font-medium text-slate-800">
                           {sub.name}
                         </span>
                       </button>
@@ -612,10 +612,10 @@ function AddIncome() {
               </div>
             )}
 
-          <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <div className="space-y-2 rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <label
               htmlFor={noteInputId}
-              className="block text-sm font-semibold uppercase tracking-wider text-slate-500"
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-500"
             >
               Nota (opcional)
             </label>
@@ -625,7 +625,7 @@ function AddIncome() {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ej: Salario mensual"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-slate-900 placeholder:text-slate-400 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder:text-slate-400 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
           </div>
 
