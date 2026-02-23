@@ -31,6 +31,27 @@ import { requireClientAuth } from '../lib/route-guards';
 import type { Category, Subcategory } from '../types';
 
 const API_BASE = getApiBase();
+
+/**
+ * Formatea el input de monto para permitir solo números con máximo 2 decimales.
+ * Reemplaza comas por puntos y limita los caracteres válidos.
+ */
+function formatAmountInput(value: string): string {
+  // Reemplazar comas por puntos
+  let cleaned = value.replace(/,/g, '.');
+  // Eliminar todo excepto números y un punto decimal
+  cleaned = cleaned.replace(/[^\d.]/g, '');
+  // Evitar múltiples puntos decimales
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = `${parts[0]}.${parts.slice(1).join('')}`;
+  }
+  // Limitar a 2 decimales
+  if (parts.length === 2 && parts[1].length > 2) {
+    cleaned = `${parts[0]}.${parts[1].slice(0, 2)}`;
+  }
+  return cleaned;
+}
 const dashboardQueryKey = (accessToken: string, boardId?: string | null) =>
   ['dashboard', accessToken, boardId ?? 'default'] as const;
 const categoriesQueryKey = (accessToken: string) =>
@@ -325,8 +346,8 @@ function AddExpenseForm() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
-      <header className="mx-auto flex w-full max-w-md items-center justify-between px-5 pb-6 pt-8">
+    <div className="h-[100dvh] flex flex-col bg-[#f7f7f5] text-slate-900 overflow-hidden">
+      <header className="mx-auto flex w-full max-w-md items-center justify-between px-5 pb-4 pt-6 shrink-0">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Nuevo gasto
         </h1>
@@ -340,38 +361,12 @@ function AddExpenseForm() {
         </Link>
       </header>
 
-      <main className="mx-auto w-full max-w-md px-5 pb-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleScanFile(file);
-            }}
-          />
-
-          <button
-            type="button"
-            disabled={scanMutation.isPending}
-            onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-3 rounded-[28px] border-2 border-dashed border-rose-300 bg-rose-50 p-5 font-semibold text-rose-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {scanMutation.isPending ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Analizando recibo...
-              </>
-            ) : (
-              <>
-                <Camera className="h-5 w-5" />
-                Escanear
-              </>
-            )}
-          </button>
-
+      <main className="flex-1 overflow-y-auto">
+        <form
+          id="expense-form"
+          onSubmit={handleSubmit}
+          className="mx-auto w-full max-w-md px-5 space-y-6 pb-4"
+        >
           <div className="space-y-3 rounded-[28px] bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
             <label
               htmlFor={dateInputId}
@@ -466,10 +461,10 @@ function AddExpenseForm() {
               </span>
               <input
                 id={amountInputId}
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                 placeholder="0.00"
                 required
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 py-5 text-3xl font-semibold text-slate-900 placeholder:text-slate-300 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
@@ -640,33 +635,62 @@ function AddExpenseForm() {
               {error}
             </div>
           )}
-
-          <div className="pt-4 space-y-3">
-            <button
-              type="submit"
-              disabled={
-                !amount || !selectedCategory || createExpenseMutation.isPending
-              }
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 hover:bg-rose-700 py-5 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {createExpenseMutation.isPending && (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              )}
-              {createExpenseMutation.isPending
-                ? 'Guardando...'
-                : 'Guardar gasto'}
-            </button>
-            <Link
-              to="/"
-              search={(current) => current}
-              params={(current) => current}
-              className="block w-full rounded-2xl border border-slate-300 bg-white py-5 text-center font-semibold text-slate-600 transition-all active:scale-[0.98]"
-            >
-              Cancelar
-            </Link>
-          </div>
         </form>
       </main>
+
+      <footer className="mx-auto w-full max-w-md px-5 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#f7f7f5] border-t border-slate-200 shrink-0">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleScanFile(file);
+          }}
+        />
+        <div className="space-y-2">
+          <button
+            type="button"
+            disabled={scanMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50 py-3 px-4 font-semibold text-rose-700 transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {scanMutation.isPending ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Analizando recibo...
+              </>
+            ) : (
+              <>
+                <Camera className="h-5 w-5" />
+                Escanear
+              </>
+            )}
+          </button>
+          <button
+            type="submit"
+            form="expense-form"
+            disabled={
+              !amount || !selectedCategory || createExpenseMutation.isPending
+            }
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 hover:bg-rose-700 py-3 text-lg font-semibold text-white transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {createExpenseMutation.isPending && (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            )}
+            {createExpenseMutation.isPending ? 'Guardando...' : 'Guardar gasto'}
+          </button>
+          <Link
+            to="/"
+            search={(current) => current}
+            params={(current) => current}
+            className="block w-full rounded-2xl border border-slate-300 bg-white py-3 text-center font-semibold text-slate-600 transition-all active:scale-[0.98]"
+          >
+            Cancelar
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

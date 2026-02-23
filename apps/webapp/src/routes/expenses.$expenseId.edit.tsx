@@ -27,6 +27,28 @@ type ExpenseDetail = {
 };
 
 const API_BASE = getApiBase();
+
+/**
+ * Formatea el input de monto para permitir solo números con máximo 2 decimales.
+ * Reemplaza comas por puntos y limita los caracteres válidos.
+ */
+function formatAmountInput(value: string): string {
+  // Reemplazar comas por puntos
+  let cleaned = value.replace(/,/g, '.');
+  // Eliminar todo excepto números y un punto decimal
+  cleaned = cleaned.replace(/[^\d.]/g, '');
+  // Evitar múltiples puntos decimales
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = `${parts[0]}.${parts.slice(1).join('')}`;
+  }
+  // Limitar a 2 decimales
+  if (parts.length === 2 && parts[1].length > 2) {
+    cleaned = `${parts[0]}.${parts[1].slice(0, 2)}`;
+  }
+  return cleaned;
+}
+
 const dashboardQueryKey = (accessToken: string) =>
   ['dashboard', accessToken] as const;
 const categoriesQueryKey = (accessToken: string) =>
@@ -381,7 +403,9 @@ function EditExpense() {
                 type="text"
                 inputMode="decimal"
                 value={amount}
-                onChange={(event) => setAmount(event.target.value)}
+                onChange={(event) =>
+                  setAmount(formatAmountInput(event.target.value))
+                }
                 placeholder="0.00"
                 required
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-5 py-5 text-3xl font-semibold text-slate-900 placeholder:text-slate-300 transition-all focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200"
