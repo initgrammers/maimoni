@@ -3,12 +3,6 @@ import { zValidator } from '@hono/zod-validator';
 import type { CategoryInput } from '@maimoni/ai';
 import { extractReceiptInfo } from '@maimoni/ai';
 import {
-  authSubjects,
-  createOpenAuthClient,
-  getSubjectIdFromAccessToken,
-  normalizeAuthIssuer,
-} from '@maimoni/auth';
-import {
   boardMembers,
   boards,
   categories,
@@ -18,7 +12,6 @@ import {
   getOrCreateInitialBoard,
   incomes,
   invitations,
-  syncUser,
   users,
 } from '@maimoni/db';
 import { and, eq, or } from 'drizzle-orm';
@@ -26,26 +19,11 @@ import { Hono } from 'hono';
 import { handle } from 'hono/aws-lambda';
 import { z } from 'zod';
 import { getEnv } from '../../../packages/utils/src/index';
-
-type UserContext = {
-  Variables: {
-    userId: string;
-  };
-};
+import { authMiddleware, type UserContext } from './middleware';
 
 const app = new Hono<UserContext>();
 
 const db = createDbClient(getEnv('DATABASE_URL'));
-const authIssuer = normalizeAuthIssuer(getEnv('AUTH_URL'));
-const authClient = createOpenAuthClient(authIssuer, 'webapp');
-
-function getBearerToken(authorization: string | undefined) {
-  if (!authorization?.startsWith('Bearer ')) {
-    return undefined;
-  }
-
-  return authorization.slice('Bearer '.length);
-}
 
 type BoardAccessRole = 'owner' | 'editor' | 'viewer';
 
@@ -304,43 +282,7 @@ const invitationActionSchema = z.object({
   token: z.string().min(20),
 });
 
-app.use('/api/*', async (c, next) => {
-  const token = getBearerToken(c.req.header('authorization'));
-  if (!token) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  let verified: Awaited<
-    ReturnType<typeof authClient.verify<typeof authSubjects>>
-  >;
-  try {
-    verified = await authClient.verify(authSubjects, token);
-  } catch {
-    return c.json({ error: 'Auth service unavailable' }, 503);
-  }
-
-  if (verified.err || verified.subject.type !== 'user') {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  let subjectId: string | undefined;
-  try {
-    subjectId = getSubjectIdFromAccessToken(token);
-  } catch {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  if (!subjectId) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  await syncUser(db, {
-    id: subjectId,
-    phoneNumber: verified.subject.properties.phoneNumber ?? null,
-  });
-
-  c.set('userId', subjectId);
-  await next();
-});
+app.use('/api/*', authMiddleware);
 
 app.get('/api/dashboard', async (c) => {
   const userId = c.get('userId');

@@ -98,6 +98,7 @@ const issuerApp = issuer({
       return ctx.subject(
         'user',
         {
+          id: userId,
           phoneNumber,
         },
         { subject: userId },
@@ -110,6 +111,7 @@ const issuerApp = issuer({
       return ctx.subject(
         'user',
         {
+          id: userId,
           phoneNumber: undefined,
         },
         { subject: userId },

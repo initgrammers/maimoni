@@ -4,6 +4,7 @@ import { object, optional, string } from 'valibot';
 
 export const authSubjects = createSubjects({
   user: object({
+    id: string(),
     phoneNumber: optional(string()),
   }),
 });
