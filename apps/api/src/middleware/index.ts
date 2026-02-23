@@ -1,1 +1,5 @@
-export { authMiddleware, type UserContext } from './auth';
+export {
+  authMiddleware,
+  createAuthMiddleware,
+  type UserContext,
+} from './auth';

@@ -12,34 +12,45 @@ type UserContext = {
   };
 };
 
-const authIssuer = normalizeAuthIssuer(getEnv('AUTH_URL'));
-const authClient = createOpenAuthClient(authIssuer, 'webapp');
+type AuthClient = ReturnType<typeof createOpenAuthClient>;
 
 function getBearerToken(authorization: string | undefined) {
   if (!authorization?.startsWith('Bearer ')) {
     return undefined;
   }
-
   return authorization.slice('Bearer '.length);
 }
 
-export const authMiddleware: MiddlewareHandler<UserContext> = async (
-  c,
-  next,
-) => {
-  const token = getBearerToken(c.req.header('authorization'));
-  if (!token) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+function createDefaultAuthClient(): AuthClient {
+  const authIssuer = normalizeAuthIssuer(getEnv('AUTH_URL'));
+  return createOpenAuthClient(authIssuer, 'webapp');
+}
 
-  const verified = await authClient.verify(authSubjects, token);
+/**
+ * Factory function para crear el auth middleware.
+ * Permite inyectar un mock client para testing.
+ */
+export function createAuthMiddleware(
+  client: AuthClient = createDefaultAuthClient(),
+): MiddlewareHandler<UserContext> {
+  return async (c, next) => {
+    const token = getBearerToken(c.req.header('authorization'));
+    if (!token) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
 
-  if (verified.err || verified.subject.type !== 'user') {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+    const verified = await client.verify(authSubjects, token);
 
-  c.set('userId', verified.subject.properties.id);
-  await next();
-};
+    if (verified.err || verified.subject.type !== 'user') {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    c.set('userId', verified.subject.properties.id);
+    await next();
+  };
+}
+
+// Middleware por defecto para producción
+export const authMiddleware = createAuthMiddleware();
 
 export type { UserContext };

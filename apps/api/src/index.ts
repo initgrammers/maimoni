@@ -1408,3 +1408,4 @@ app.get('/api/categories', async (c) => {
 });
 
 export const handler = handle(app);
+export { app };
