@@ -1,5 +1,5 @@
 import '../test-setup';
-import { describe, expect, it, mock } from 'bun:test';
+import { afterAll, describe, expect, it, mock } from 'bun:test';
 import { Hono } from 'hono';
 import type { UserContext } from '../middleware';
 import { createMockDb } from './route-test-utils';
@@ -44,6 +44,10 @@ function createFormData(file: File | null) {
 }
 
 describe('scan router', () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   it('returns 400 when no file is provided', async () => {
     const db = createMockDb({ selectResults: [[]] });
     const app = await createApp(db);

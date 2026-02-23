@@ -1,32 +1,32 @@
 import { zValidator } from '@hono/zod-validator';
-import { categories, incomes } from '@maimoni/db';
-import { and, eq } from 'drizzle-orm';
+import { incomeSchema, incomeUpdateSchema } from '@maimoni/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserContext } from '../middleware';
-import { getUserBoardRole } from '../shared/board-access';
-import { incomeSchema, incomeUpdateSchema } from '../shared/schemas';
-import type { ApiDeps } from './types';
+import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
 
 export function createIncomesRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
+  const coreDeps = createCoreDeps({ db });
+  const { listIncomes, getIncome, createIncome, updateIncome, deleteIncome } =
+    createCoreUseCases(coreDeps);
+  const { boardAccessService } = coreDeps.services;
+
+  const resolveBoardAccess = async (userId: string, boardId: string) =>
+    boardAccessService.getUserBoardRole({ userId, boardId });
 
   router.get('/incomes', async (c) => {
     const userId = c.get('userId');
     const boardId = c.req.query('boardId');
     if (!boardId) return c.json({ error: 'boardId is required' }, 400);
 
-    const access = await getUserBoardRole(db, userId, boardId);
-    if (!access) {
-      return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+    const result = await listIncomes({ actorId: userId, boardId });
+
+    if (result.status === 'listed') {
+      return c.json(result.incomes);
     }
 
-    const result = await db
-      .select()
-      .from(incomes)
-      .where(and(eq(incomes.boardId, boardId), eq(incomes.isActive, true)));
-
-    return c.json(result);
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
   });
 
   router.get('/incomes/:incomeId', async (c) => {
@@ -37,61 +37,51 @@ export function createIncomesRouter({ db }: ApiDeps) {
       return c.json({ error: 'incomeId inválido' }, 400);
     }
 
-    const [income] = await db
-      .select()
-      .from(incomes)
-      .where(
-        and(eq(incomes.id, incomeIdResult.data), eq(incomes.isActive, true)),
-      )
-      .limit(1);
+    const result = await getIncome({
+      actorId: userId,
+      incomeId: incomeIdResult.data,
+    });
 
-    if (!income) {
+    if (result.status === 'found') {
+      return c.json(result.income);
+    }
+
+    if (result.status === 'income-not-found') {
       return c.json({ error: 'Ingreso no encontrado' }, 404);
     }
 
-    const access = await getUserBoardRole(db, userId, income.boardId);
-    if (!access) {
+    if (result.status === 'forbidden') {
       return c.json({ error: 'No tienes acceso a este ingreso' }, 403);
     }
 
-    return c.json(income);
+    return c.json({ error: 'incomeId inválido' }, 400);
   });
 
   router.post('/incomes', zValidator('json', incomeSchema), async (c) => {
     const userId = c.get('userId');
     const body = c.req.valid('json');
 
-    const access = await getUserBoardRole(db, userId, body.boardId);
-    if (!access) {
-      return c.json({ error: 'No tienes acceso a este tablero' }, 403);
-    }
-    if (access.role === 'viewer') {
-      return c.json({ error: 'No tienes permisos para crear ingresos' }, 403);
+    const result = await createIncome({ ...body, actorId: userId });
+
+    if (result.status === 'created') {
+      return c.json([result.income]);
     }
 
-    const [category] = await db
-      .select()
-      .from(categories)
-      .where(eq(categories.id, body.categoryId))
-      .limit(1);
-
-    if (!category || category.type !== 'income') {
+    if (result.status === 'invalid-category') {
       return c.json({ error: 'Categoría de ingreso inválida' }, 400);
     }
 
-    const result = await db
-      .insert(incomes)
-      .values({
-        boardId: body.boardId,
-        userId,
-        amount: body.amount,
-        categoryId: body.categoryId,
-        note: body.note,
-        date: body.date ? new Date(body.date) : new Date(),
-      })
-      .returning();
+    if (result.status === 'forbidden') {
+      const access = await resolveBoardAccess(userId, body.boardId);
+      if (!access) {
+        return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+      }
+      if (access.role === 'viewer') {
+        return c.json({ error: 'No tienes permisos para crear ingresos' }, 403);
+      }
+    }
 
-    return c.json(result[0]);
+    return c.json({ error: 'Datos inválidos' }, 400);
   });
 
   router.patch(
@@ -107,60 +97,32 @@ export function createIncomesRouter({ db }: ApiDeps) {
 
       const body = c.req.valid('json');
 
-      const [existingIncome] = await db
-        .select()
-        .from(incomes)
-        .where(
-          and(eq(incomes.id, incomeIdResult.data), eq(incomes.isActive, true)),
-        )
-        .limit(1);
+      const result = await updateIncome({
+        actorId: userId,
+        incomeId: incomeIdResult.data,
+        update: body,
+      });
 
-      if (!existingIncome) {
+      if (result.status === 'updated') {
+        return c.json(result.income);
+      }
+
+      if (result.status === 'income-not-found') {
         return c.json({ error: 'Ingreso no encontrado' }, 404);
       }
 
-      const access = await getUserBoardRole(db, userId, existingIncome.boardId);
-      if (!access) {
-        return c.json({ error: 'No tienes acceso a este ingreso' }, 403);
+      if (result.status === 'invalid-category') {
+        return c.json({ error: 'Categoría de ingreso inválida' }, 400);
       }
-      if (access.role === 'viewer') {
+
+      if (result.status === 'forbidden') {
         return c.json(
           { error: 'No tienes permisos para editar ingresos' },
           403,
         );
       }
 
-      if (body.categoryId) {
-        const [category] = await db
-          .select()
-          .from(categories)
-          .where(eq(categories.id, body.categoryId))
-          .limit(1);
-
-        if (!category || category.type !== 'income') {
-          return c.json({ error: 'Categoría de ingreso inválida' }, 400);
-        }
-      }
-
-      const [updatedIncome] = await db
-        .update(incomes)
-        .set({
-          amount: body.amount,
-          categoryId: body.categoryId,
-          note: body.note,
-          date: body.date ? new Date(body.date) : undefined,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(incomes.id, incomeIdResult.data),
-            eq(incomes.boardId, existingIncome.boardId),
-            eq(incomes.isActive, true),
-          ),
-        )
-        .returning();
-
-      return c.json(updatedIncome);
+      return c.json({ error: 'incomeId inválido' }, 400);
     },
   );
 
@@ -172,50 +134,27 @@ export function createIncomesRouter({ db }: ApiDeps) {
       return c.json({ error: 'incomeId inválido' }, 400);
     }
 
-    const result = await db
-      .select()
-      .from(incomes)
-      .where(
-        and(eq(incomes.id, incomeIdResult.data), eq(incomes.isActive, true)),
-      )
-      .limit(1);
+    const result = await deleteIncome({
+      actorId: userId,
+      incomeId: incomeIdResult.data,
+    });
 
-    if (result.length === 0) {
+    if (result.status === 'deleted') {
+      return c.json({ success: true, id: result.id });
+    }
+
+    if (result.status === 'income-not-found') {
       return c.json({ error: 'Ingreso no encontrado' }, 404);
     }
 
-    const existingIncome = result[0];
-    const access = await getUserBoardRole(db, userId, existingIncome.boardId);
-    if (!access) {
-      return c.json({ error: 'No tienes acceso a este ingreso' }, 403);
-    }
-    if (access.role === 'viewer') {
+    if (result.status === 'forbidden') {
       return c.json(
         { error: 'No tienes permisos para eliminar ingresos' },
         403,
       );
     }
 
-    const deleted = await db
-      .update(incomes)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(incomes.id, incomeIdResult.data),
-          eq(incomes.boardId, existingIncome.boardId),
-          eq(incomes.isActive, true),
-        ),
-      )
-      .returning({ id: incomes.id });
-
-    if (deleted.length === 0) {
-      return c.json({ error: 'Ingreso no encontrado' }, 404);
-    }
-
-    return c.json({ success: true, id: deleted[0].id });
+    return c.json({ error: 'incomeId inválido' }, 400);
   });
 
   return router;

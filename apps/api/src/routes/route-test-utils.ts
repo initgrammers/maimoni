@@ -11,7 +11,8 @@ export function createMockDb(options: MockDbOptions = {}) {
   const updateResults = [...(options.updateResults ?? [])];
   const deleteResults = [...(options.deleteResults ?? [])];
 
-  const next = (queue: unknown[]) => (queue.length ? queue.shift() : undefined);
+  const next = (queue: unknown[], fallback: unknown) =>
+    queue.length ? queue.shift() : fallback;
 
   const createQuery = (result: unknown) => {
     const query = Promise.resolve(result) as unknown as {
@@ -48,9 +49,9 @@ export function createMockDb(options: MockDbOptions = {}) {
   };
 
   return {
-    select: () => createQuery(next(selectResults)),
-    insert: () => createMutation(next(insertResults)),
-    update: () => createMutation(next(updateResults)),
-    delete: () => createMutation(next(deleteResults)),
+    select: () => createQuery(next(selectResults, [])),
+    insert: () => createMutation(next(insertResults, [])),
+    update: () => createMutation(next(updateResults, [])),
+    delete: () => createMutation(next(deleteResults, [])),
   };
 }

@@ -1,5 +1,21 @@
 import { describe, expect, mock, test } from 'bun:test';
-import type { CategoryInput, ScanResult } from './index';
+
+// Inline type definitions to avoid static import from './index'
+// This prevents the @maimoni/ai module mock from affecting these tests
+type CategoryInput = {
+  name: string;
+  type: 'expense' | 'income';
+};
+
+type ScanResult = {
+  total_amount: number;
+  date: string;
+  merchant_name: string;
+  category: string;
+  type: 'expense' | 'income';
+  note: string;
+  items: Array<{ name: string; price: number }>;
+};
 
 const TEST_CATEGORIES: CategoryInput[] = [
   { name: 'Alimentación', type: 'expense' },

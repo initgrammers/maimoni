@@ -111,7 +111,7 @@ describe('expenses router', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.id).toBe(EXPENSE_ID);
+    expect(body[0].id).toBe(EXPENSE_ID);
   });
 
   it('updates an expense with valid category', async () => {

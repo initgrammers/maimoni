@@ -1,0 +1,29 @@
+{
+  "name": "@maimoni/core",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "zod": "^4.3.6",
+    "drizzle-orm": "^0.40.0",
+    "@maimoni/db": "workspace:*",
+    "@maimoni/ai": "workspace:*",
+    "@maimoni/auth": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./boards": "./src/boards/index.ts",
+    "./invitations": "./src/invitations/index.ts",
+    "./incomes": "./src/incomes/index.ts",
+    "./expenses": "./src/expenses/index.ts",
+    "./categories": "./src/categories/index.ts",
+    "./dashboard": "./src/dashboard/index.ts",
+    "./scan": "./src/scan/index.ts",
+    "./auth-claim": "./src/auth-claim/index.ts",
+    "./shared/application/board-access": "./src/shared/application/board-access.ts",
+    "./shared/application/invitation-availability": "./src/shared/application/invitation-availability.ts",
+    "./shared/domain/ids": "./src/shared/domain/ids.ts",
+    "./shared/domain/money": "./src/shared/domain/money.ts",
+    "./shared/domain/date": "./src/shared/domain/date.ts"
+  }
+}

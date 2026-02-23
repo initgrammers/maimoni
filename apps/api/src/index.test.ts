@@ -1,18 +1,6 @@
 import './test-setup';
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { testClient } from 'hono/testing';
-
-mock.module('@maimoni/ai', () => ({
-  extractReceiptInfo: async () => ({
-    total_amount: 0,
-    date: '2026-02-17T12:00:00.000Z',
-    merchant_name: 'Mock',
-    category: 'Mock',
-    type: 'expense',
-    note: 'Mock',
-    items: [],
-  }),
-}));
 
 async function loadApp() {
   const { app } = await import('./index');
@@ -129,6 +117,18 @@ describe('API with testClient', () => {
         expenses: { $get: unknown; $post: unknown };
         incomes: { $get: unknown; $post: unknown };
         scan: { $post: unknown };
+        auth: { claim: { $post: unknown } };
+        boards: {
+          [key: string]: {
+            settings: { $patch: unknown };
+            invitations: { $get: unknown; $post: unknown };
+          };
+        };
+        invitations: {
+          resolve: { $get: unknown };
+          accept: { $post: unknown };
+          decline: { $post: unknown };
+        } & Record<string, { revoke: { $post: unknown } }>;
       };
     };
 
@@ -140,5 +140,13 @@ describe('API with testClient', () => {
     expect(client.api.incomes.$get).toBeDefined();
     expect(client.api.incomes.$post).toBeDefined();
     expect(client.api.scan.$post).toBeDefined();
+    expect(client.api.auth.claim.$post).toBeDefined();
+    expect(client.api.boards.anything.settings.$patch).toBeDefined();
+    expect(client.api.boards.anything.invitations.$get).toBeDefined();
+    expect(client.api.boards.anything.invitations.$post).toBeDefined();
+    expect(client.api.invitations.resolve.$get).toBeDefined();
+    expect(client.api.invitations.accept.$post).toBeDefined();
+    expect(client.api.invitations.decline.$post).toBeDefined();
+    expect(client.api.invitations.anything.revoke.$post).toBeDefined();
   });
 });

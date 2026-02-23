@@ -136,7 +136,7 @@ describe('incomes router', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.id).toBe(INCOME_ID);
+    expect(body[0].id).toBe(INCOME_ID);
   });
 
   it('updates an income with valid category', async () => {

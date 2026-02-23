@@ -7,6 +7,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@maimoni/ai": "workspace:*",
     "@maimoni/auth": "workspace:*",
+    "@maimoni/core": "workspace:*",
     "@maimoni/db": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",

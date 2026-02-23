@@ -5,7 +5,7 @@ import type { UserContext } from '../middleware';
 import { createAuthRouter } from './auth';
 import { createMockDb } from './route-test-utils';
 
-const USER_ID = 'user-1';
+const USER_ID = '00000000-0000-4000-8000-000000000001';
 const ANON_ID = '00000000-0000-4000-8000-000000000099';
 
 function createApp(db: unknown) {

@@ -1,53 +1,50 @@
 import { zValidator } from '@hono/zod-validator';
-import { categories, expenses } from '@maimoni/db';
-import { and, eq } from 'drizzle-orm';
+import { expenseSchema, expenseUpdateSchema } from '@maimoni/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserContext } from '../middleware';
-import { getUserBoardRole } from '../shared/board-access';
-import { expenseSchema, expenseUpdateSchema } from '../shared/schemas';
-import type { ApiDeps } from './types';
+import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
 
 export function createExpensesRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
+  const coreDeps = createCoreDeps({ db });
+  const {
+    listExpenses,
+    getExpense,
+    createExpense,
+    updateExpense,
+    deleteExpense,
+  } = createCoreUseCases(coreDeps);
+  const { boardAccessService } = coreDeps.services;
+
+  const resolveBoardAccess = async (userId: string, boardId: string) =>
+    boardAccessService.getUserBoardRole({ userId, boardId });
 
   router.post('/expenses', zValidator('json', expenseSchema), async (c) => {
     const userId = c.get('userId');
     const body = c.req.valid('json');
 
-    const access = await getUserBoardRole(db, userId, body.boardId);
-    if (!access) {
-      return c.json({ error: 'No tienes acceso a este tablero' }, 403);
-    }
-    if (access.role === 'viewer') {
-      return c.json({ error: 'No tienes permisos para crear gastos' }, 403);
+    const result = await createExpense({ ...body, actorId: userId });
+
+    if (result.status === 'created') {
+      return c.json([result.expense]);
     }
 
-    const [category] = await db
-      .select()
-      .from(categories)
-      .where(eq(categories.id, body.categoryId))
-      .limit(1);
-
-    if (!category || category.type !== 'expense') {
+    if (result.status === 'invalid-category') {
       return c.json({ error: 'Categoría de gasto inválida' }, 400);
     }
 
-    const result = await db
-      .insert(expenses)
-      .values({
-        boardId: body.boardId,
-        userId,
-        amount: body.amount,
-        categoryId: body.categoryId,
-        note: body.note,
-        tags: body.tags,
-        receiptUrl: body.receiptUrl,
-        date: body.date ? new Date(body.date) : new Date(),
-      })
-      .returning();
+    if (result.status === 'forbidden') {
+      const access = await resolveBoardAccess(userId, body.boardId);
+      if (!access) {
+        return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+      }
+      if (access.role === 'viewer') {
+        return c.json({ error: 'No tienes permisos para crear gastos' }, 403);
+      }
+    }
 
-    return c.json(result[0]);
+    return c.json({ error: 'Datos inválidos' }, 400);
   });
 
   router.get('/expenses/:expenseId', async (c) => {
@@ -58,24 +55,24 @@ export function createExpensesRouter({ db }: ApiDeps) {
       return c.json({ error: 'expenseId inválido' }, 400);
     }
 
-    const [expense] = await db
-      .select()
-      .from(expenses)
-      .where(
-        and(eq(expenses.id, expenseIdResult.data), eq(expenses.isActive, true)),
-      )
-      .limit(1);
+    const result = await getExpense({
+      actorId: userId,
+      expenseId: expenseIdResult.data,
+    });
 
-    if (!expense) {
+    if (result.status === 'found') {
+      return c.json(result.expense);
+    }
+
+    if (result.status === 'expense-not-found') {
       return c.json({ error: 'Gasto no encontrado' }, 404);
     }
 
-    const access = await getUserBoardRole(db, userId, expense.boardId);
-    if (!access) {
+    if (result.status === 'forbidden') {
       return c.json({ error: 'No tienes acceso a este gasto' }, 403);
     }
 
-    return c.json(expense);
+    return c.json({ error: 'expenseId inválido' }, 400);
   });
 
   router.patch(
@@ -91,64 +88,29 @@ export function createExpensesRouter({ db }: ApiDeps) {
 
       const body = c.req.valid('json');
 
-      const [existingExpense] = await db
-        .select()
-        .from(expenses)
-        .where(
-          and(
-            eq(expenses.id, expenseIdResult.data),
-            eq(expenses.isActive, true),
-          ),
-        )
-        .limit(1);
+      const result = await updateExpense({
+        actorId: userId,
+        expenseId: expenseIdResult.data,
+        update: body,
+      });
 
-      if (!existingExpense) {
+      if (result.status === 'updated') {
+        return c.json(result.expense);
+      }
+
+      if (result.status === 'expense-not-found') {
         return c.json({ error: 'Gasto no encontrado' }, 404);
       }
 
-      const access = await getUserBoardRole(
-        db,
-        userId,
-        existingExpense.boardId,
-      );
-      if (!access) {
-        return c.json({ error: 'No tienes acceso a este gasto' }, 403);
+      if (result.status === 'invalid-category') {
+        return c.json({ error: 'Categoría de gasto inválida' }, 400);
       }
-      if (access.role === 'viewer') {
+
+      if (result.status === 'forbidden') {
         return c.json({ error: 'No tienes permisos para editar gastos' }, 403);
       }
 
-      if (body.categoryId) {
-        const [category] = await db
-          .select()
-          .from(categories)
-          .where(eq(categories.id, body.categoryId))
-          .limit(1);
-
-        if (!category || category.type !== 'expense') {
-          return c.json({ error: 'Categoría de gasto inválida' }, 400);
-        }
-      }
-
-      const [updatedExpense] = await db
-        .update(expenses)
-        .set({
-          amount: body.amount,
-          categoryId: body.categoryId,
-          note: body.note,
-          date: body.date ? new Date(body.date) : undefined,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(expenses.id, expenseIdResult.data),
-            eq(expenses.boardId, existingExpense.boardId),
-            eq(expenses.isActive, true),
-          ),
-        )
-        .returning();
-
-      return c.json(updatedExpense);
+      return c.json({ error: 'expenseId inválido' }, 400);
     },
   );
 
@@ -160,47 +122,24 @@ export function createExpensesRouter({ db }: ApiDeps) {
       return c.json({ error: 'expenseId inválido' }, 400);
     }
 
-    const existingRows = await db
-      .select()
-      .from(expenses)
-      .where(
-        and(eq(expenses.id, expenseIdResult.data), eq(expenses.isActive, true)),
-      )
-      .limit(1);
+    const result = await deleteExpense({
+      actorId: userId,
+      expenseId: expenseIdResult.data,
+    });
 
-    if (existingRows.length === 0) {
+    if (result.status === 'deleted') {
+      return c.json({ success: true, id: result.id });
+    }
+
+    if (result.status === 'expense-not-found') {
       return c.json({ error: 'Gasto no encontrado' }, 404);
     }
 
-    const existingExpense = existingRows[0];
-    const access = await getUserBoardRole(db, userId, existingExpense.boardId);
-    if (!access) {
-      return c.json({ error: 'No tienes acceso a este gasto' }, 403);
-    }
-    if (access.role === 'viewer') {
+    if (result.status === 'forbidden') {
       return c.json({ error: 'No tienes permisos para eliminar gastos' }, 403);
     }
 
-    const result = await db
-      .update(expenses)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(expenses.id, expenseIdResult.data),
-          eq(expenses.boardId, existingExpense.boardId),
-          eq(expenses.isActive, true),
-        ),
-      )
-      .returning({ id: expenses.id });
-
-    if (result.length === 0) {
-      return c.json({ error: 'Gasto no encontrado' }, 404);
-    }
-
-    return c.json({ success: true, id: result[0].id });
+    return c.json({ error: 'expenseId inválido' }, 400);
   });
 
   router.get('/expenses', async (c) => {
@@ -208,17 +147,13 @@ export function createExpensesRouter({ db }: ApiDeps) {
     const boardId = c.req.query('boardId');
     if (!boardId) return c.json({ error: 'boardId is required' }, 400);
 
-    const access = await getUserBoardRole(db, userId, boardId);
-    if (!access) {
-      return c.json({ error: 'No tienes acceso a este tablero' }, 403);
+    const result = await listExpenses({ actorId: userId, boardId });
+
+    if (result.status === 'listed') {
+      return c.json(result.expenses);
     }
 
-    const result = await db
-      .select()
-      .from(expenses)
-      .where(and(eq(expenses.boardId, boardId), eq(expenses.isActive, true)));
-
-    return c.json(result);
+    return c.json({ error: 'No tienes acceso a este tablero' }, 403);
   });
 
   return router;

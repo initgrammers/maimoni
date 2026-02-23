@@ -67,6 +67,7 @@ describe('boards router', () => {
     const db = createMockDb({
       selectResults: [
         [{ id: BOARD_ID, ownerId: 'other', isActive: true }],
+        [{ id: BOARD_ID, ownerId: 'other', isActive: true }],
         [{ boardId: BOARD_ID, userId: USER_ID, isActive: true }],
       ],
     });
@@ -130,6 +131,7 @@ describe('boards router', () => {
   it('rejects deletes for non-owners', async () => {
     const db = createMockDb({
       selectResults: [
+        [{ id: BOARD_ID, ownerId: 'other', isActive: true }],
         [{ id: BOARD_ID, ownerId: 'other', isActive: true }],
         [{ boardId: BOARD_ID, userId: USER_ID, isActive: true }],
       ],
