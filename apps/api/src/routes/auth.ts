@@ -33,7 +33,7 @@ export function createAuthRouter({ db }: ApiDeps) {
       return c.json({ error: 'Failed to claim anonymous data' }, 400);
     }
 
-    return c.json({ error: result.error }, 400);
+    return c.json({ error: result.status === 'failed' ? result.error : 'Failed to claim anonymous data' }, 400);
   });
 
   return router;
