@@ -11,6 +11,7 @@
     "@maimoni/db": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
+    "hono-wide-logger": "^0.1.1",
     "valibot": "^1.2.0",
     "zod": "^4.3.6"
   },

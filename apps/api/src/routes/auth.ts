@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import type { UserContext } from '../middleware';
-import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
+import {
+  type ApiDeps,
+  addBusinessContext,
+  createCoreDeps,
+  createCoreUseCases,
+} from './types';
 
 export function createAuthRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
@@ -11,6 +16,12 @@ export function createAuthRouter({ db }: ApiDeps) {
     const realUserId = c.get('userId');
     const body = (await c.req.json()) as { anonymousId?: string };
     const anonymousId = body.anonymousId;
+
+    addBusinessContext(c, {
+      endpoint: 'claim_anonymous_data',
+      entityType: 'auth',
+      action: 'claim',
+    });
 
     if (!anonymousId) {
       return c.json({ error: 'anonymousId is required' }, 400);
@@ -33,7 +44,15 @@ export function createAuthRouter({ db }: ApiDeps) {
       return c.json({ error: 'Failed to claim anonymous data' }, 400);
     }
 
-    return c.json({ error: result.status === 'failed' ? result.error : 'Failed to claim anonymous data' }, 400);
+    return c.json(
+      {
+        error:
+          result.status === 'failed'
+            ? result.error
+            : 'Failed to claim anonymous data',
+      },
+      400,
+    );
   });
 
   return router;

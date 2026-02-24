@@ -9,6 +9,15 @@ type AuthClient = ReturnType<
   typeof import('@maimoni/auth').createOpenAuthClient
 >;
 
+function createMockWideLogger() {
+  return {
+    addContext: (_key: string, _value: Record<string, unknown>) => {},
+    addError: (_error: Error, _metadata?: Record<string, unknown>) => {},
+    error: (_message: string) => {},
+    getEvent: () => ({}),
+  };
+}
+
 const createMockAuthClient = (overrides = {}): AuthClient =>
   ({
     verify: async () => ({
@@ -32,8 +41,17 @@ const createMockAuthClient = (overrides = {}): AuthClient =>
   }) as unknown as AuthClient;
 
 // Helper para crear app de test con mock auth
-function createTestApp(mockClient?: AuthClient) {
+function createTestApp(
+  mockClient?: AuthClient,
+  mockLogger = createMockWideLogger(),
+) {
   const app = new Hono<UserContext>();
+
+  // Mount mock wide-logger middleware first
+  app.use('/api/*', async (c, next) => {
+    c.set('wide-logger', mockLogger);
+    await next();
+  });
 
   // Usar middleware con mock client si se proporciona
   app.use('/api/*', createAuthMiddleware(mockClient));
@@ -116,6 +134,34 @@ describe('Auth Middleware Tests', () => {
       const body = await res.json();
       expect(body.userId).toBe('test-user-id');
     });
+
+    it('should attach user context to logger after successful auth', async () => {
+      const contextCalls: Array<{
+        key: string;
+        value: Record<string, unknown>;
+      }> = [];
+
+      const mockLogger = {
+        addContext: (key: string, value: Record<string, unknown>) => {
+          contextCalls.push({ key, value });
+        },
+        addError: () => {},
+        error: () => {},
+        getEvent: () => ({}),
+      };
+
+      const app = createTestApp(createMockAuthClient(), mockLogger);
+
+      const res = await app.request('/api/dashboard', {
+        headers: { authorization: 'Bearer valid.token' },
+      });
+
+      expect(res.status).toBe(200);
+      expect(contextCalls.length).toBe(1);
+      // Auth middleware only adds user context (business context is added by routes)
+      expect(contextCalls[0].key).toBe('user');
+      expect(contextCalls[0].value).toEqual({ id: 'test-user-id' });
+    });
   });
 
   describe('Protected Endpoints', () => {
@@ -162,6 +208,13 @@ describe('Production Auth Middleware', () => {
     const { authMiddleware } = await import('./auth');
 
     const app = new Hono<UserContext>();
+
+    // Mount mock wide-logger middleware first (as in real app)
+    app.use('/api/*', async (c, next) => {
+      c.set('wide-logger', createMockWideLogger());
+      await next();
+    });
+
     app.use('/api/*', authMiddleware);
     app.get('/api/test', (c) => c.json({ ok: true }));
 

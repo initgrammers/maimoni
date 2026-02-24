@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import type { UserContext } from '../middleware';
-import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
+import {
+  type ApiDeps,
+  addBusinessContext,
+  createCoreDeps,
+  createCoreUseCases,
+} from './types';
 
 export function createScanRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
@@ -10,6 +15,13 @@ export function createScanRouter({ db }: ApiDeps) {
 
   router.post('/scan', async (c) => {
     const userId = c.get('userId');
+
+    addBusinessContext(c, {
+      endpoint: 'scan_receipt',
+      entityType: 'scan',
+      action: 'scan',
+    });
+
     const formData = await c.req.formData();
     const file = formData.get('file') as File;
 
@@ -58,7 +70,16 @@ export function createScanRouter({ db }: ApiDeps) {
 
       return c.json({ error: scanResult.error }, 500);
     } catch (error) {
-      console.error('Receipt scan failed:', error);
+      const logger = c.get('wide-logger');
+      if (logger) {
+        logger.addError(
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            code: 'SCAN_FAILED',
+            context: 'receipt_scan',
+          },
+        );
+      }
       return c.json(
         {
           error:

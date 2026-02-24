@@ -35,6 +35,8 @@ import {
   type InvitationAvailabilityService,
   type ScanAiClient,
 } from '@maimoni/core';
+import type { Context } from 'hono';
+import type { UserContext } from '../middleware';
 import {
   getOrSelectAccessibleBoard,
   getUserBoardRole,
@@ -214,4 +216,48 @@ export function createCoreUseCases(deps: CoreDeps) {
       authClaimRepository: repositories.authClaimRepository,
     }),
   };
+}
+
+/**
+ * Business context for wide-event logging
+ */
+export type BusinessEntityType =
+  | 'board'
+  | 'expense'
+  | 'income'
+  | 'category'
+  | 'invitation'
+  | 'scan'
+  | 'auth';
+
+export type BusinessAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'list'
+  | 'get'
+  | 'scan'
+  | 'claim';
+
+export interface BusinessContext {
+  endpoint: string;
+  entityType?: BusinessEntityType;
+  action?: BusinessAction;
+  boardId?: string;
+  entityId?: string;
+}
+
+/**
+ * Add business context to wide-logger for observability
+ */
+export function addBusinessContext(
+  c: Context<UserContext>,
+  context: BusinessContext,
+): void {
+  const logger = c.get('wide-logger' as never);
+  if (logger && typeof logger === 'object' && 'addContext' in logger) {
+    (
+      logger as { addContext: (key: string, value: unknown) => void }
+    ).addContext('business', context);
+  }
 }

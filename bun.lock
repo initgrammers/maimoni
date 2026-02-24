@@ -29,6 +29,7 @@
         "@maimoni/db": "workspace:*",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.11.9",
+        "hono-wide-logger": "^0.1.1",
         "valibot": "^1.2.0",
         "zod": "^4.3.6",
       },
@@ -1113,6 +1114,8 @@
     "hasown": ["hasown@2.0.2", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ=="],
 
     "hono": ["hono@4.12.0", "", {}, "sha512-NekXntS5M94pUfiVZ8oXXK/kkri+5WpX2/Ik+LVsl+uvw+soj4roXIsPqO+XsWrAw20mOzaXOZf3Q7PfB9A/IA=="],
+
+    "hono-wide-logger": ["hono-wide-logger@0.1.1", "", { "peerDependencies": { "hono": "^4.0.0" } }, "sha512-UpRBLRbK6L9rGOwIZr1qO8Gru13uLk28JozN4NVdXKI/Xi3PnEAicfbmbBSWgBK4v+DPtwrcz2651lquLMeqZA=="],
 
     "html-encoding-sniffer": ["html-encoding-sniffer@6.0.0", "", { "dependencies": { "@exodus/bytes": "^1.6.0" } }, "sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg=="],
 

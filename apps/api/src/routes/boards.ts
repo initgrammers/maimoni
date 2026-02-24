@@ -3,7 +3,12 @@ import { boardSettingsSchema } from '@maimoni/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserContext } from '../middleware';
-import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
+import {
+  type ApiDeps,
+  addBusinessContext,
+  createCoreDeps,
+  createCoreUseCases,
+} from './types';
 
 export function createBoardsRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
@@ -21,6 +26,13 @@ export function createBoardsRouter({ db }: ApiDeps) {
       if (!boardIdResult.success) {
         return c.json({ error: 'boardId inválido' }, 400);
       }
+
+      addBusinessContext(c, {
+        endpoint: 'update_board_settings',
+        entityType: 'board',
+        action: 'update',
+        boardId: boardIdResult.data,
+      });
 
       const body = c.req.valid('json');
 
@@ -63,6 +75,13 @@ export function createBoardsRouter({ db }: ApiDeps) {
     if (!boardIdResult.success) {
       return c.json({ error: 'boardId inválido' }, 400);
     }
+
+    addBusinessContext(c, {
+      endpoint: 'delete_board',
+      entityType: 'board',
+      action: 'delete',
+      boardId: boardIdResult.data,
+    });
 
     const result = await deleteBoard({
       actorId: userId,

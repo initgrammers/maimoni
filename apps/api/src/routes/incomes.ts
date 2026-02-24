@@ -3,7 +3,12 @@ import { incomeSchema, incomeUpdateSchema } from '@maimoni/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserContext } from '../middleware';
-import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
+import {
+  type ApiDeps,
+  addBusinessContext,
+  createCoreDeps,
+  createCoreUseCases,
+} from './types';
 
 export function createIncomesRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
@@ -19,6 +24,13 @@ export function createIncomesRouter({ db }: ApiDeps) {
     const userId = c.get('userId');
     const boardId = c.req.query('boardId');
     if (!boardId) return c.json({ error: 'boardId is required' }, 400);
+
+    addBusinessContext(c, {
+      endpoint: 'list_incomes',
+      entityType: 'income',
+      action: 'list',
+      boardId,
+    });
 
     const result = await listIncomes({ actorId: userId, boardId });
 
@@ -36,6 +48,13 @@ export function createIncomesRouter({ db }: ApiDeps) {
     if (!incomeIdResult.success) {
       return c.json({ error: 'incomeId inválido' }, 400);
     }
+
+    addBusinessContext(c, {
+      endpoint: 'get_income',
+      entityType: 'income',
+      action: 'get',
+      entityId: incomeIdResult.data,
+    });
 
     const result = await getIncome({
       actorId: userId,
@@ -60,6 +79,13 @@ export function createIncomesRouter({ db }: ApiDeps) {
   router.post('/incomes', zValidator('json', incomeSchema), async (c) => {
     const userId = c.get('userId');
     const body = c.req.valid('json');
+
+    addBusinessContext(c, {
+      endpoint: 'create_income',
+      entityType: 'income',
+      action: 'create',
+      boardId: body.boardId,
+    });
 
     const result = await createIncome({ ...body, actorId: userId });
 
@@ -94,6 +120,13 @@ export function createIncomesRouter({ db }: ApiDeps) {
       if (!incomeIdResult.success) {
         return c.json({ error: 'incomeId inválido' }, 400);
       }
+
+      addBusinessContext(c, {
+        endpoint: 'update_income',
+        entityType: 'income',
+        action: 'update',
+        entityId: incomeIdResult.data,
+      });
 
       const body = c.req.valid('json');
 
@@ -133,6 +166,13 @@ export function createIncomesRouter({ db }: ApiDeps) {
     if (!incomeIdResult.success) {
       return c.json({ error: 'incomeId inválido' }, 400);
     }
+
+    addBusinessContext(c, {
+      endpoint: 'delete_income',
+      entityType: 'income',
+      action: 'delete',
+      entityId: incomeIdResult.data,
+    });
 
     const result = await deleteIncome({
       actorId: userId,

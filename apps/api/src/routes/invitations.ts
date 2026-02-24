@@ -3,7 +3,12 @@ import { createInvitationSchema, invitationActionSchema } from '@maimoni/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserContext } from '../middleware';
-import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
+import {
+  type ApiDeps,
+  addBusinessContext,
+  createCoreDeps,
+  createCoreUseCases,
+} from './types';
 
 export function createInvitationsRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
@@ -29,6 +34,13 @@ export function createInvitationsRouter({ db }: ApiDeps) {
       if (!boardIdResult.success) {
         return c.json({ error: 'boardId inválido' }, 400);
       }
+
+      addBusinessContext(c, {
+        endpoint: 'create_invitation',
+        entityType: 'invitation',
+        action: 'create',
+        boardId: boardIdResult.data,
+      });
 
       const body = c.req.valid('json');
 
@@ -75,6 +87,13 @@ export function createInvitationsRouter({ db }: ApiDeps) {
       return c.json({ error: 'boardId inválido' }, 400);
     }
 
+    addBusinessContext(c, {
+      endpoint: 'list_invitations',
+      entityType: 'invitation',
+      action: 'list',
+      boardId: boardIdResult.data,
+    });
+
     const result = await listInvitations({
       actorId: userId,
       boardId: boardIdResult.data,
@@ -103,6 +122,13 @@ export function createInvitationsRouter({ db }: ApiDeps) {
     if (!invitationIdResult.success) {
       return c.json({ error: 'invitationId inválido' }, 400);
     }
+
+    addBusinessContext(c, {
+      endpoint: 'revoke_invitation',
+      entityType: 'invitation',
+      action: 'delete',
+      entityId: invitationIdResult.data,
+    });
 
     const result = await revokeInvitation({
       actorId: userId,
@@ -158,6 +184,12 @@ export function createInvitationsRouter({ db }: ApiDeps) {
       return c.json({ error: 'token es requerido' }, 400);
     }
 
+    addBusinessContext(c, {
+      endpoint: 'resolve_invitation',
+      entityType: 'invitation',
+      action: 'get',
+    });
+
     const result = await resolveInvitation({ token });
 
     if (result.status === 'resolved') {
@@ -186,6 +218,12 @@ export function createInvitationsRouter({ db }: ApiDeps) {
     async (c) => {
       const userId = c.get('userId');
       const body = c.req.valid('json');
+
+      addBusinessContext(c, {
+        endpoint: 'accept_invitation',
+        entityType: 'invitation',
+        action: 'update',
+      });
 
       const result = await acceptInvitation({
         actorId: userId,
@@ -229,6 +267,12 @@ export function createInvitationsRouter({ db }: ApiDeps) {
     zValidator('json', invitationActionSchema),
     async (c) => {
       const body = c.req.valid('json');
+
+      addBusinessContext(c, {
+        endpoint: 'decline_invitation',
+        entityType: 'invitation',
+        action: 'update',
+      });
 
       const result = await declineInvitation({ token: body.token });
 

@@ -3,7 +3,12 @@ import { expenseSchema, expenseUpdateSchema } from '@maimoni/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { UserContext } from '../middleware';
-import { type ApiDeps, createCoreDeps, createCoreUseCases } from './types';
+import {
+  type ApiDeps,
+  addBusinessContext,
+  createCoreDeps,
+  createCoreUseCases,
+} from './types';
 
 export function createExpensesRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();
@@ -23,6 +28,13 @@ export function createExpensesRouter({ db }: ApiDeps) {
   router.post('/expenses', zValidator('json', expenseSchema), async (c) => {
     const userId = c.get('userId');
     const body = c.req.valid('json');
+
+    addBusinessContext(c, {
+      endpoint: 'create_expense',
+      entityType: 'expense',
+      action: 'create',
+      boardId: body.boardId,
+    });
 
     const result = await createExpense({ ...body, actorId: userId });
 
@@ -55,6 +67,13 @@ export function createExpensesRouter({ db }: ApiDeps) {
       return c.json({ error: 'expenseId inválido' }, 400);
     }
 
+    addBusinessContext(c, {
+      endpoint: 'get_expense',
+      entityType: 'expense',
+      action: 'get',
+      entityId: expenseIdResult.data,
+    });
+
     const result = await getExpense({
       actorId: userId,
       expenseId: expenseIdResult.data,
@@ -85,6 +104,13 @@ export function createExpensesRouter({ db }: ApiDeps) {
       if (!expenseIdResult.success) {
         return c.json({ error: 'expenseId inválido' }, 400);
       }
+
+      addBusinessContext(c, {
+        endpoint: 'update_expense',
+        entityType: 'expense',
+        action: 'update',
+        entityId: expenseIdResult.data,
+      });
 
       const body = c.req.valid('json');
 
@@ -122,6 +148,13 @@ export function createExpensesRouter({ db }: ApiDeps) {
       return c.json({ error: 'expenseId inválido' }, 400);
     }
 
+    addBusinessContext(c, {
+      endpoint: 'delete_expense',
+      entityType: 'expense',
+      action: 'delete',
+      entityId: expenseIdResult.data,
+    });
+
     const result = await deleteExpense({
       actorId: userId,
       expenseId: expenseIdResult.data,
@@ -146,6 +179,13 @@ export function createExpensesRouter({ db }: ApiDeps) {
     const userId = c.get('userId');
     const boardId = c.req.query('boardId');
     if (!boardId) return c.json({ error: 'boardId is required' }, 400);
+
+    addBusinessContext(c, {
+      endpoint: 'list_expenses',
+      entityType: 'expense',
+      action: 'list',
+      boardId,
+    });
 
     const result = await listExpenses({ actorId: userId, boardId });
 

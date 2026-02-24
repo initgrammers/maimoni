@@ -130,6 +130,32 @@ bun run --cwd packages/db db:studio     # Open Drizzle Studio
 - Auth via `c.get('userId')` from UserContext
 - Validation via `zValidator('json', schema)`
 
+### Logging with Wide-Logger
+
+All routes should add business context at the start of handlers:
+
+```typescript
+import { addBusinessContext } from './types'
+
+router.get('/endpoint', async (c) => {
+  addBusinessContext(c, {
+    endpoint: 'descriptive_name',
+    entityType: 'expense' | 'income' | 'board' | 'category' | 'invitation' | 'scan' | 'auth',
+    action: 'create' | 'update' | 'delete' | 'list' | 'get' | 'scan' | 'claim',
+    boardId: extractedBoardId,
+    entityId: extractedEntityId,
+  })
+  // ... handler logic
+})
+```
+
+**Naming conventions:**
+- `endpoint`: snake_case describing the operation (e.g., `create_expense`, `update_board_settings`)
+- `entityType`: One of the valid business entity types
+- `action`: One of the valid business actions
+- `boardId`: Include when operating within a board context
+- `entityId`: Include when operating on a specific resource by ID
+
 ### Auth Middleware Testing Pattern
 ```typescript
 // Use factory function for tests
