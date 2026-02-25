@@ -4,7 +4,7 @@ import { getEnv } from '../packages/utils/src/index';
 import { auth } from './auth';
 import { router } from './router';
 
-export const api = new sst.aws.Function('Api', {
+export const api = new sst.aws.Function('api', {
   handler: 'apps/api/src/index.handler',
   environment: {
     ...getEnv(['DATABASE_URL', 'GROQ_API_KEY', 'LLAMA_CLOUD_API_KEY']),

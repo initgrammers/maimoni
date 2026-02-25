@@ -1,3 +1,10 @@
 /// <reference path="../.sst/platform/config.d.ts" />
 
-export const router = new sst.aws.Router('MyRouter');
+import { domain } from "./domain";
+
+export const router = new sst.aws.Router('router', {
+    domain: $dev ? undefined : {
+        name: domain,
+        dns: sst.cloudflare.dns()
+    }
+});

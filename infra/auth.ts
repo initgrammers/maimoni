@@ -15,7 +15,7 @@ export const authTable = new sst.aws.Dynamo('authTable', {
   },
 });
 
-export const auth = new sst.aws.Auth.v1('Auth', {
+export const auth = new sst.aws.Auth.v1('auth', {
   authenticator: {
     handler: 'apps/auth/src/index.handler',
     environment: {

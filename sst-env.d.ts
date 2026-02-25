@@ -6,31 +6,31 @@
 
 declare module "sst" {
   export interface Resource {
-    "Api": {
+    "api": {
       "name": string
       "type": "sst.aws.Function"
       "url": string
     }
-    "Auth": {
+    "auth": {
       "publicKey": string
       "type": "sst.aws.Auth"
     }
-    "AuthAuthenticator": {
+    "authAuthenticator": {
       "name": string
       "type": "sst.aws.Function"
-      "url": string
-    }
-    "MyRouter": {
-      "type": "sst.aws.Router"
-      "url": string
-    }
-    "Webapp": {
-      "type": "sst.aws.TanstackStart"
       "url": string
     }
     "authTable": {
       "name": string
       "type": "sst.aws.Dynamo"
+    }
+    "router": {
+      "type": "sst.aws.Router"
+      "url": string
+    }
+    "webapp": {
+      "type": "sst.aws.TanstackStart"
+      "url": string
     }
   }
 }
