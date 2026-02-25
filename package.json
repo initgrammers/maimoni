@@ -10,7 +10,8 @@
     "test:all": "bun --env-file=.env test --timeout 120000 && bun run --cwd packages/db test:integration && bun run --cwd apps/webapp test && bun run --cwd apps/webapp test:e2e",
     "check": "biome check --write .",
     "format": "biome format --write .",
-    "lint": "biome lint ."
+    "lint": "biome lint .",
+    "dev": "bun run --filter '*' dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.1",

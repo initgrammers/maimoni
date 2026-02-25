@@ -3,7 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { testClient } from 'hono/testing';
 
 async function loadApp() {
-  const { app } = await import('./index');
+  const { app } = await import('./app');
   return app;
 }
 

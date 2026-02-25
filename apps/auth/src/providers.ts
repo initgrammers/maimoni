@@ -114,7 +114,8 @@ export const WhatsAppCodeProvider = CodeProvider(
     copy: {
       email_placeholder: 'Telefono',
       code_info: getCodeInfoMessage(),
-      code_sent: 'Estamos en modo beta. Consulte el código con Henry Villavicencio +593 978 847 449'
+      code_sent:
+        'Estamos en modo beta. Consulte el código con Henry Villavicencio +593 978 847 449',
     },
     sendCode: async (claims, code) => {
       const phoneNumber = claims.phone ?? claims.phoneNumber;

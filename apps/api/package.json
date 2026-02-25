@@ -1,7 +1,7 @@
 {
   "name": "api",
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/dev.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
