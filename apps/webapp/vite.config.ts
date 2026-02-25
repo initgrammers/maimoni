@@ -2,11 +2,13 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-// import basicSsl from '@vitejs/plugin-basic-ssl';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
 import viteTsConfigPaths from 'vite-tsconfig-paths';
+
+const isDevMode = process.env.MODE === 'dev';
 
 const config = defineConfig({
   server: { proxy: {} },
@@ -17,7 +19,7 @@ const config = defineConfig({
   },
   plugins: [
     devtools(),
-    nitro(),
+    isDevMode ? basicSsl() : nitro(),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
@@ -25,7 +27,6 @@ const config = defineConfig({
     tailwindcss(),
     tanstackStart(),
     viteReact(),
-    // basicSsl(),
   ],
   nitro: {
     preset: 'aws-lambda',

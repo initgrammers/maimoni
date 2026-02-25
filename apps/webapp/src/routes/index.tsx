@@ -1375,7 +1375,7 @@ function Dashboard() {
                 type="button"
                 disabled={loading}
               >
-                Iniciar sesión con WhatsApp
+                Iniciar sesión con número de teléfono
               </button>
             </div>
 

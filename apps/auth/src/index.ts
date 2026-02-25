@@ -1,54 +1,15 @@
 import {
   authSubjects,
-  CodeProvider,
-  CodeUI,
   createStorage,
   issuer,
-  type Provider,
   subjectFromPhone,
 } from '@maimoni/auth';
 import { createClient, syncUser } from '@maimoni/db';
 import { handle } from 'hono/aws-lambda';
-import twilio from 'twilio';
 import { getEnv } from '../../../packages/utils/src/index';
+import { AnonymousProvider, WhatsAppCodeProvider } from './providers';
 
 const db = createClient(getEnv('DATABASE_URL'));
-
-const AnonymousProvider = (): Provider<Record<string, never>> => ({
-  type: 'anonymous',
-  init(route, options) {
-    route.get('/authorize', async (c) => {
-      const response = await options.success(c, {});
-      return options.forward(c, response);
-    });
-  },
-});
-
-function getTwilioClient() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
-  if (!accountSid || !authToken) {
-    throw new Error('Twilio credentials are not configured');
-  }
-
-  if (!accountSid.startsWith('AC')) {
-    throw new Error('TWILIO_ACCOUNT_SID must start with AC');
-  }
-
-  return twilio(accountSid, authToken);
-}
-
-function toEcuadorPhoneNumber(input: string) {
-  const normalized = input.trim();
-  if (normalized.startsWith('+')) {
-    return normalized;
-  }
-
-  const digits = normalized.replace(/\D/g, '');
-  const local = digits.startsWith('0') ? digits.slice(1) : digits;
-  return `+593${local}`;
-}
 
 const storage = createStorage(JSON.parse(getEnv('AUTH_STORAGE')));
 
@@ -59,33 +20,7 @@ const issuerApp = issuer({
   subjects: authSubjects,
   providers: {
     anonymous: AnonymousProvider(),
-    whatsapp: CodeProvider(
-      CodeUI({
-        mode: 'phone',
-        copy: {
-          email_placeholder: 'Telefono',
-          code_info: 'Te enviaremos un codigo por WhatsApp.',
-        },
-        sendCode: async (claims, code) => {
-          const phoneNumber = claims.phone ?? claims.phoneNumber;
-          if (!phoneNumber) throw new Error('Phone number is required');
-          const ecuadorPhoneNumber = toEcuadorPhoneNumber(phoneNumber);
-          console.log('Sending code to', code);
-          const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-          if (!whatsappNumber) {
-            throw new Error('TWILIO_WHATSAPP_NUMBER is not configured');
-          }
-
-          const twilioClient = getTwilioClient();
-
-          await twilioClient.messages.create({
-            body: `Tu codigo de verificacion para Maimonei es: ${code}`,
-            from: `whatsapp:${whatsappNumber}`,
-            to: `whatsapp:${ecuadorPhoneNumber}`,
-          });
-        },
-      }),
-    ),
+    whatsapp: WhatsAppCodeProvider,
   },
   success: async (ctx, value) => {
     if (value.provider === 'whatsapp') {

@@ -166,7 +166,7 @@ function InviteRoute() {
               }}
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
             >
-              Iniciar sesión con WhatsApp
+              Iniciar sesión con número de teléfono
             </button>
           </div>
         ) : resolveQuery.isPending ? (
