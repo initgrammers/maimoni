@@ -11,6 +11,7 @@ export type DashboardIncome = {
   categoryName: string;
   categoryEmoji: string | null;
   date: string | null;
+  note: string | null;
 };
 
 export type DashboardExpense = {
@@ -20,6 +21,7 @@ export type DashboardExpense = {
   categoryName: string;
   categoryEmoji: string | null;
   date: string | null;
+  note: string | null;
 };
 
 export type DashboardRepository = {

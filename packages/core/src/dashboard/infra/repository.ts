@@ -22,6 +22,7 @@ export function createDashboardRepository(db: DbClient): DashboardRepository {
           amount: incomes.amount,
           categoryId: incomes.categoryId,
           date: incomes.date,
+          note: incomes.note,
           categoryName: categories.name,
           categoryEmoji: categories.emoji,
         })
@@ -36,6 +37,7 @@ export function createDashboardRepository(db: DbClient): DashboardRepository {
         categoryName: row.categoryName,
         categoryEmoji: row.categoryEmoji,
         date: toDashboardDate(row.date),
+        note: row.note,
       }));
     },
 
@@ -46,6 +48,7 @@ export function createDashboardRepository(db: DbClient): DashboardRepository {
           amount: expenses.amount,
           categoryId: expenses.categoryId,
           date: expenses.date,
+          note: expenses.note,
           categoryName: categories.name,
           categoryEmoji: categories.emoji,
         })
@@ -60,6 +63,7 @@ export function createDashboardRepository(db: DbClient): DashboardRepository {
         categoryName: row.categoryName,
         categoryEmoji: row.categoryEmoji,
         date: toDashboardDate(row.date),
+        note: row.note,
       }));
     },
 
