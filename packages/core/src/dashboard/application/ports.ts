@@ -19,6 +19,9 @@ export type DashboardExpense = {
   categoryId: string;
   categoryName: string;
   categoryEmoji: string | null;
+  subcategoryId: string | null;
+  subcategoryName: string | null;
+  subcategoryEmoji: string | null;
   date: string | null;
 };
 

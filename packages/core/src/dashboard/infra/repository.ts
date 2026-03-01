@@ -1,5 +1,5 @@
 import { boards, categories, expenses, incomes } from '@maimoni/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type {
   DashboardBoard,
   DashboardExpense,
@@ -48,19 +48,45 @@ export function createDashboardRepository(db: DbClient): DashboardRepository {
           date: expenses.date,
           categoryName: categories.name,
           categoryEmoji: categories.emoji,
+          parentId: categories.parentId,
         })
         .from(expenses)
         .innerJoin(categories, eq(expenses.categoryId, categories.id))
         .where(and(eq(expenses.boardId, boardId), eq(expenses.isActive, true)));
 
-      return rows.map((row) => ({
-        id: row.id,
-        amount: row.amount,
-        categoryId: row.categoryId,
-        categoryName: row.categoryName,
-        categoryEmoji: row.categoryEmoji,
-        date: toDashboardDate(row.date),
-      }));
+      // Collect all unique parent IDs
+      const parentIds = [...new Set(rows.map((r) => r.parentId).filter(Boolean))] as string[];
+      
+      // Fetch all parent categories in one query
+      const parentCategories = parentIds.length > 0
+        ? await db
+            .select({
+              id: categories.id,
+              name: categories.name,
+              emoji: categories.emoji,
+            })
+            .from(categories)
+            .where(inArray(categories.id, parentIds))
+        : [];
+      
+      const parentMap = new Map(parentCategories.map((c) => [c.id, c]));
+
+      return rows.map((row) => {
+        const isSubcategory = row.parentId !== null;
+        const parentCategory = isSubcategory ? parentMap.get(row.parentId!) : null;
+
+        return {
+          id: row.id,
+          amount: row.amount,
+          categoryId: isSubcategory && parentCategory ? parentCategory.id : row.categoryId,
+          categoryName: isSubcategory && parentCategory ? parentCategory.name : row.categoryName,
+          categoryEmoji: isSubcategory && parentCategory ? parentCategory.emoji : row.categoryEmoji,
+          subcategoryId: isSubcategory ? row.categoryId : null,
+          subcategoryName: isSubcategory ? row.categoryName : null,
+          subcategoryEmoji: isSubcategory ? row.categoryEmoji : null,
+          date: toDashboardDate(row.date),
+        };
+      });
     },
 
     async findBoardById(boardId: string): Promise<DashboardBoard | null> {
