@@ -40,6 +40,10 @@ type Income = {
 };
 
 type Expense = {
+  categoryId: string;
+  subcategoryId: string | null;
+  subcategoryName: string | null;
+  subcategoryEmoji: string | null;
   id: string;
   amount: string;
   date: string;
@@ -921,11 +925,6 @@ function Dashboard() {
       );
     }
 
-    const categoryTotals: Record<
-      string,
-      { name: string; emoji: string; total: number; color: string }
-    > = {};
-
     const colors = [
       '#3b82f6',
       '#10b981',
@@ -937,24 +936,70 @@ function Dashboard() {
       '#84cc16',
     ];
 
+    const subcategoryTotals: Record<
+      string,
+      { name: string; emoji: string; categoryName: string; categoryEmoji: string; total: number; color: string }
+    > = {};
+
+    const categoryTotals: Record<
+      string,
+      { name: string; emoji: string; total: number; color: string }
+    > = {};
+
     let colorIndex = 0;
+    let categoryColorMap: Record<string, string> = {};
 
     for (const expense of periodExpenses) {
-      const key = expense.categoryName;
-      if (categoryTotals[key]) {
-        categoryTotals[key].total += expense.amount;
+      const subcategoryKey = expense.subcategoryName 
+        ? expense.categoryName + '|' + expense.subcategoryName
+        : expense.categoryName + '|__none__';
+      
+      if (subcategoryTotals[subcategoryKey]) {
+        subcategoryTotals[subcategoryKey].total += expense.amount;
       } else {
-        categoryTotals[key] = {
+        const color = colors[colorIndex % colors.length];
+        colorIndex++;
+        
+        if (!categoryColorMap[expense.categoryName]) {
+          categoryColorMap[expense.categoryName] = color;
+        }
+        
+        subcategoryTotals[subcategoryKey] = {
+          name: expense.subcategoryName || expense.categoryName,
+          emoji: expense.subcategoryEmoji || expense.categoryEmoji,
+          categoryName: expense.categoryName,
+          categoryEmoji: expense.categoryEmoji,
+          total: expense.amount,
+          color,
+        };
+      }
+
+      if (categoryTotals[expense.categoryName]) {
+        categoryTotals[expense.categoryName].total += expense.amount;
+      } else {
+        const color = categoryColorMap[expense.categoryName] || colors[colorIndex % colors.length];
+        if (!categoryColorMap[expense.categoryName]) {
+          categoryColorMap[expense.categoryName] = color;
+          colorIndex++;
+        }
+        
+        categoryTotals[expense.categoryName] = {
           name: expense.categoryName,
           emoji: expense.categoryEmoji,
           total: expense.amount,
-          color: colors[colorIndex % colors.length],
+          color,
         };
-        colorIndex++;
       }
     }
 
     const totalExpense = periodExpenses.reduce((sum, m) => sum + m.amount, 0);
+
+    const subcategories = Object.values(subcategoryTotals)
+      .sort((a, b) => b.total - a.total)
+      .map((sub) => ({
+        ...sub,
+        percentage: totalExpense > 0 ? (sub.total / totalExpense) * 100 : 0,
+      }));
 
     const categories = Object.values(categoryTotals)
       .sort((a, b) => b.total - a.total)
@@ -963,7 +1008,7 @@ function Dashboard() {
         percentage: totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0,
       }));
 
-    return { categories, totalExpense };
+    return { categories, subcategories, totalExpense };
   }, [movements, statsPeriod]);
 
   const monthlyExpenseTotal = useMemo(() => {
@@ -1843,8 +1888,9 @@ function Dashboard() {
                     <div className="mt-6 w-full space-y-3">
                       {statsCategoryBreakdown.categories.map((cat) => (
                         <div
-                          key={cat.name}
-                          className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"
+                          key={'cat-' + cat.name}
+                          className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3 border-l-4"
+                          style={{ borderLeftColor: cat.color }}
                         >
                           <div className="flex items-center gap-3">
                             <span
@@ -1854,7 +1900,7 @@ function Dashboard() {
                               {cat.emoji}
                             </span>
                             <div>
-                              <p className="text-sm font-medium text-slate-900">
+                              <p className="text-sm font-semibold text-slate-900">
                                 {cat.name}
                               </p>
                               <p className="text-xs text-slate-500">
@@ -1862,11 +1908,36 @@ function Dashboard() {
                               </p>
                             </div>
                           </div>
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="text-sm font-bold text-slate-900">
                             {currencyFormatter.format(cat.total)}
                           </p>
                         </div>
                       ))}
+                      {(statsCategoryBreakdown.subcategories || []).length > 0 && (
+                        <div className="mt-2 space-y-2 pl-4 border-l-2 border-slate-200">
+                          {(statsCategoryBreakdown.subcategories || []).map((sub, idx) => (
+                            <div
+                              key={'sub-' + idx}
+                              className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="flex h-6 w-6 items-center justify-center rounded text-sm"
+                                  style={{ backgroundColor: `${sub.color}20` }}
+                                >
+                                  {sub.emoji}
+                                </span>
+                                <p className="text-xs text-slate-700">
+                                  {sub.name}
+                                </p>
+                              </div>
+                              <p className="text-xs font-medium text-slate-600">
+                                {sub.percentage.toFixed(1)}%
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
