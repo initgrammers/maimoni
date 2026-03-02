@@ -84,4 +84,59 @@ describe('dashboard router', () => {
     expect(body.expenses[0].categoryEmoji).toBe('food');
     expect(body.boards[0].role).toBe('owner');
   });
+
+  it('returns note field for incomes and expenses', async () => {
+    const db = createMockDb({
+      selectResults: [
+        [
+          {
+            id: BOARD_ID,
+            ownerId: USER_ID,
+            name: 'Board',
+            spendingLimitAmount: null,
+          },
+        ],
+        [
+          {
+            id: 'income-1',
+            boardId: BOARD_ID,
+            categoryId: 'category-1',
+            amount: '5000',
+            date: new Date('2026-01-15'),
+            note: 'Monthly salary',
+            categoryName: 'Salary',
+            categoryEmoji: 'money',
+          },
+        ],
+        [
+          {
+            id: 'expense-1',
+            boardId: BOARD_ID,
+            categoryId: 'category-2',
+            amount: '50',
+            date: new Date('2026-01-20'),
+            note: 'Lunch with team',
+            categoryName: 'Food',
+            categoryEmoji: 'food',
+          },
+        ],
+        [
+          {
+            id: BOARD_ID,
+            name: 'Board',
+            spendingLimitAmount: null,
+          },
+        ],
+        [],
+      ],
+    });
+    const app = createApp(db);
+
+    const res = await app.request(`/api/dashboard?boardId=${BOARD_ID}`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.incomes[0].note).toBe('Monthly salary');
+    expect(body.expenses[0].note).toBe('Lunch with team');
+  });
 });
