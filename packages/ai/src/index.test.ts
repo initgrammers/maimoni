@@ -73,7 +73,14 @@ function setupMocks(options: {
 }
 
 describe('extractReceiptInfo', () => {
+  // Helper to ensure we're using the OCR pipeline (not vision)
+  function useOcrPipeline() {
+    process.env.USE_SINGLE_MODEL_SCAN = 'false';
+    process.env.OPEN_ROUTER_API_KEY = 'test-openrouter-key';
+  }
+
   test('throws when LLAMA_CLOUD_API_KEY is not set', async () => {
+    useOcrPipeline();
     const origLlama = process.env.LLAMA_CLOUD_API_KEY;
     const origGroq = process.env.GROQ_API_KEY;
     delete process.env.LLAMA_CLOUD_API_KEY;
@@ -93,6 +100,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('throws when GROQ_API_KEY is not set', async () => {
+    useOcrPipeline();
     const origLlama = process.env.LLAMA_CLOUD_API_KEY;
     const origGroq = process.env.GROQ_API_KEY;
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
@@ -112,6 +120,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('throws when OCR returns empty text', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -125,6 +134,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('throws when Groq returns empty content', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -138,6 +148,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('throws when Groq returns invalid JSON', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -151,6 +162,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('returns parsed scan result for valid response', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -172,6 +184,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('defaults type to expense when invalid', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -189,6 +202,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('defaults total_amount to 0 when negative', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -206,6 +220,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('defaults category to Otros when missing', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 
@@ -223,6 +238,7 @@ describe('extractReceiptInfo', () => {
   });
 
   test('defaults items to empty array when invalid', async () => {
+    useOcrPipeline();
     process.env.LLAMA_CLOUD_API_KEY = 'test-llama-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
 

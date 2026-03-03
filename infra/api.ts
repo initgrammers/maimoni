@@ -7,7 +7,13 @@ import { router } from './router';
 export const api = new sst.aws.Function('api', {
   handler: 'apps/api/src/index.handler',
   environment: {
-    ...getEnv(['DATABASE_URL', 'GROQ_API_KEY', 'LLAMA_CLOUD_API_KEY']),
+    ...getEnv([
+      'DATABASE_URL',
+      'GROQ_API_KEY',
+      'LLAMA_CLOUD_API_KEY',
+      'OPEN_ROUTER_API_KEY',
+      'USE_SINGLE_MODEL_SCAN',
+    ]),
     AUTH_URL: auth.url,
   },
   link: [auth],

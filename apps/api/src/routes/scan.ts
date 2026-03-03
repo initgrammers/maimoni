@@ -27,12 +27,31 @@ export function createScanRouter({ db }: ApiDeps) {
 
     try {
       const allCategories = file ? await categoryRepository.listAll() : [];
-      const categoryInputs = allCategories.map(
-        (category: { name: string; type: 'income' | 'expense' }) => ({
-          name: category.name,
-          type: category.type,
-        }),
-      );
+
+      // Build category hierarchy with subcategories
+      const categoriesMap = new Map<
+        string,
+        { name: string; type: 'income' | 'expense'; subcategories: string[] }
+      >();
+
+      for (const cat of allCategories) {
+        if (!cat.parentId) {
+          // This is a main category
+          categoriesMap.set(cat.id, {
+            name: cat.name,
+            type: cat.type,
+            subcategories: [],
+          });
+        } else {
+          // This is a subcategory - add to parent
+          const parent = categoriesMap.get(cat.parentId);
+          if (parent) {
+            parent.subcategories.push(cat.name);
+          }
+        }
+      }
+
+      const categoryInputs = Array.from(categoriesMap.values());
 
       const scanResult = await scanReceipt({
         actorId: userId,

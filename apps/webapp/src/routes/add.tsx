@@ -125,6 +125,7 @@ interface ScanResponse {
   date: string;
   merchant_name: string;
   category: string;
+  subcategory?: string;
   type: 'expense' | 'income';
   note: string;
   items: Array<{ name: string; price: number }>;
@@ -274,11 +275,28 @@ function AddExpenseForm() {
   useEffect(() => {
     if (!pendingScanCategory || categories.length === 0) return;
 
-    const matched = categories.find(
+    // First, try to match with main categories
+    const matchedMain = categories.find(
       (cat) => cat.name.toLowerCase() === pendingScanCategory.toLowerCase(),
     );
-    if (matched) {
-      setSelectedCategory(matched);
+    if (matchedMain) {
+      setSelectedCategory(matchedMain);
+      setSelectedSubcategory(null);
+    } else {
+      // If not matched, try to find in subcategories
+      for (const cat of categories) {
+        if (cat.subcategories) {
+          const matchedSub = cat.subcategories.find(
+            (sub) =>
+              sub.name.toLowerCase() === pendingScanCategory.toLowerCase(),
+          );
+          if (matchedSub) {
+            setSelectedCategory(cat);
+            setSelectedSubcategory(matchedSub);
+            break;
+          }
+        }
+      }
     }
     setPendingScanCategory(null);
   }, [categories, pendingScanCategory]);
@@ -304,12 +322,29 @@ function AddExpenseForm() {
       }
       setNote(result.note || result.merchant_name || '');
 
-      if (result.type === 'expense') {
-        const matched = categories.find(
+      if (result.type === 'expense' || result.type === 'income') {
+        // Try to match with main category
+        const matchedMain = categories.find(
           (cat) => cat.name.toLowerCase() === result.category.toLowerCase(),
         );
-        if (matched) {
-          setSelectedCategory(matched);
+
+        if (matchedMain) {
+          setSelectedCategory(matchedMain);
+
+          // If AI returned a subcategory, try to match it
+          if (result.subcategory) {
+            const matchedSub = matchedMain.subcategories?.find(
+              (sub) =>
+                sub.name.toLowerCase() === result.subcategory?.toLowerCase(),
+            );
+            if (matchedSub) {
+              setSelectedSubcategory(matchedSub);
+            } else {
+              setSelectedSubcategory(null);
+            }
+          } else {
+            setSelectedSubcategory(null);
+          }
           setShowCategories(false);
         }
       }

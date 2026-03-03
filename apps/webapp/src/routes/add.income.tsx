@@ -127,6 +127,7 @@ interface ScanResponse {
   date: string;
   merchant_name: string;
   category: string;
+  subcategory?: string;
   type: 'expense' | 'income';
   note: string;
   items: Array<{ name: string; price: number }>;
@@ -303,11 +304,27 @@ function AddIncome() {
         setShowCategories(false);
         setShowSubcategories(false);
       } else {
+        // Try to match with main category
         const matched = categoriesIncome.find(
           (cat) => cat.name.toLowerCase() === result.category.toLowerCase(),
         );
         if (matched) {
           setSelectedCategory(matched);
+
+          // If AI returned a subcategory, try to match it
+          if (result.subcategory) {
+            const matchedSub = matched.subcategories?.find(
+              (sub) =>
+                sub.name.toLowerCase() === result.subcategory?.toLowerCase(),
+            );
+            if (matchedSub) {
+              setSelectedSubcategory(matchedSub);
+            } else {
+              setSelectedSubcategory(null);
+            }
+          } else {
+            setSelectedSubcategory(null);
+          }
           setShowCategories(false);
         }
       }
