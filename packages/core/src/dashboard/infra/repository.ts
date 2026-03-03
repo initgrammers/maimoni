@@ -58,32 +58,46 @@ export function createDashboardRepository(db: DbClient): DashboardRepository {
         .where(and(eq(expenses.boardId, boardId), eq(expenses.isActive, true)));
 
       // Collect all unique parent IDs
-      const parentIds = [...new Set(rows.map((r) => r.parentId).filter(Boolean))] as string[];
-      
+      const parentIds = [
+        ...new Set(rows.map((r) => r.parentId).filter(Boolean)),
+      ] as string[];
+
       // Fetch all parent categories in one query
-      const parentCategories = parentIds.length > 0
-        ? await db
-            .select({
-              id: categories.id,
-              name: categories.name,
-              emoji: categories.emoji,
-            })
-            .from(categories)
-            .where(inArray(categories.id, parentIds))
-        : [];
-      
+      const parentCategories =
+        parentIds.length > 0
+          ? await db
+              .select({
+                id: categories.id,
+                name: categories.name,
+                emoji: categories.emoji,
+              })
+              .from(categories)
+              .where(inArray(categories.id, parentIds))
+          : [];
+
       const parentMap = new Map(parentCategories.map((c) => [c.id, c]));
 
       return rows.map((row) => {
         const isSubcategory = row.parentId !== null;
-        const parentCategory = isSubcategory ? parentMap.get(row.parentId!) : null;
+        const parentCategory = isSubcategory
+          ? parentMap.get(row.parentId ?? '')
+          : null;
 
         return {
           id: row.id,
           amount: row.amount,
-          categoryId: isSubcategory && parentCategory ? parentCategory.id : row.categoryId,
-          categoryName: isSubcategory && parentCategory ? parentCategory.name : row.categoryName,
-          categoryEmoji: isSubcategory && parentCategory ? parentCategory.emoji : row.categoryEmoji,
+          categoryId:
+            isSubcategory && parentCategory
+              ? parentCategory.id
+              : row.categoryId,
+          categoryName:
+            isSubcategory && parentCategory
+              ? parentCategory.name
+              : row.categoryName,
+          categoryEmoji:
+            isSubcategory && parentCategory
+              ? parentCategory.emoji
+              : row.categoryEmoji,
           subcategoryId: isSubcategory ? row.categoryId : null,
           subcategoryName: isSubcategory ? row.categoryName : null,
           subcategoryEmoji: isSubcategory ? row.categoryEmoji : null,

@@ -11,6 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { StackedBarChart } from '../components/charts/StackedBarChart';
 import {
   Drawer,
   DrawerClose,
@@ -94,10 +95,39 @@ type DisplayMovement = {
   note: string | null;
   categoryName: string;
   categoryEmoji: string;
+  categoryId: string;
+  subcategoryId: string | null;
+  subcategoryName: string | null;
+  subcategoryEmoji: string | null;
 };
 
 type Period = 'week' | 'month' | 'year';
 type DashboardView = 'dashboard' | 'stats' | 'profile' | 'settings';
+
+// Sunburst chart types
+export interface SunburstSubcategory {
+  id: string;
+  name: string;
+  percentage: number;
+  total: number;
+  color: string;
+  emoji: string;
+}
+
+export interface SunburstCategory {
+  id: string;
+  name: string;
+  percentage: number;
+  total: number;
+  color: string;
+  emoji: string;
+  children: SunburstSubcategory[];
+}
+
+export interface SunburstData {
+  categories: SunburstCategory[];
+  totalExpense: number;
+}
 type PigMood = 'sin_datos' | 'zen' | 'fuerte' | 'alerta' | 'urgencia';
 
 function getMovementDateLabel(date: Date) {
@@ -408,7 +438,6 @@ function Dashboard() {
   >(null);
   const [showDeleteBoardConfirm, setShowDeleteBoardConfirm] = useState(false);
   const [boardActionError, setBoardActionError] = useState<string | null>(null);
-
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
     setAnonymousId(window.localStorage.getItem('anonymousId'));
@@ -663,6 +692,10 @@ function Dashboard() {
       note: income.note,
       categoryName: income.categoryName,
       categoryEmoji: income.categoryEmoji,
+      categoryId: income.categoryName,
+      subcategoryId: null,
+      subcategoryName: null,
+      subcategoryEmoji: null,
     }));
 
     const mappedExpenses = data.expenses.map((expense) => ({
@@ -673,6 +706,10 @@ function Dashboard() {
       note: expense.note,
       categoryName: expense.categoryName,
       categoryEmoji: expense.categoryEmoji,
+      categoryId: expense.categoryId,
+      subcategoryId: expense.subcategoryId,
+      subcategoryName: expense.subcategoryName,
+      subcategoryEmoji: expense.subcategoryEmoji,
     }));
 
     return [...mappedIncomes, ...mappedExpenses].sort(
@@ -894,7 +931,7 @@ function Dashboard() {
     return ((currentTotal - previousTotal) / previousTotal) * 100;
   }, [statsPeriodExpenses]);
 
-  const statsCategoryBreakdown = useMemo(() => {
+  const statsCategoryBreakdown = useMemo<SunburstData>(() => {
     const now = new Date();
     let periodExpenses: DisplayMovement[] = [];
 
@@ -936,79 +973,142 @@ function Dashboard() {
       '#84cc16',
     ];
 
-    const subcategoryTotals: Record<
-      string,
-      { name: string; emoji: string; categoryName: string; categoryEmoji: string; total: number; color: string }
-    > = {};
+    const totalExpense = periodExpenses.reduce((sum, m) => sum + m.amount, 0);
 
-    const categoryTotals: Record<
+    // Group expenses by category first
+    const categoryGroups: Record<
       string,
-      { name: string; emoji: string; total: number; color: string }
+      {
+        name: string;
+        emoji: string;
+        total: number;
+        color: string;
+        subcategories: Record<
+          string,
+          { name: string; emoji: string; total: number }
+        >;
+      }
     > = {};
 
     let colorIndex = 0;
-    let categoryColorMap: Record<string, string> = {};
 
     for (const expense of periodExpenses) {
-      const subcategoryKey = expense.subcategoryName 
-        ? expense.categoryName + '|' + expense.subcategoryName
-        : expense.categoryName + '|__none__';
-      
-      if (subcategoryTotals[subcategoryKey]) {
-        subcategoryTotals[subcategoryKey].total += expense.amount;
-      } else {
-        const color = colors[colorIndex % colors.length];
-        colorIndex++;
-        
-        if (!categoryColorMap[expense.categoryName]) {
-          categoryColorMap[expense.categoryName] = color;
-        }
-        
-        subcategoryTotals[subcategoryKey] = {
-          name: expense.subcategoryName || expense.categoryName,
-          emoji: expense.subcategoryEmoji || expense.categoryEmoji,
-          categoryName: expense.categoryName,
-          categoryEmoji: expense.categoryEmoji,
-          total: expense.amount,
-          color,
-        };
-      }
+      const categoryKey = expense.categoryName;
 
-      if (categoryTotals[expense.categoryName]) {
-        categoryTotals[expense.categoryName].total += expense.amount;
-      } else {
-        const color = categoryColorMap[expense.categoryName] || colors[colorIndex % colors.length];
-        if (!categoryColorMap[expense.categoryName]) {
-          categoryColorMap[expense.categoryName] = color;
-          colorIndex++;
-        }
-        
-        categoryTotals[expense.categoryName] = {
+      if (!categoryGroups[categoryKey]) {
+        categoryGroups[categoryKey] = {
           name: expense.categoryName,
           emoji: expense.categoryEmoji,
-          total: expense.amount,
-          color,
+          total: 0,
+          color: colors[colorIndex % colors.length],
+          subcategories: {},
+        };
+        colorIndex++;
+      }
+
+      categoryGroups[categoryKey].total += expense.amount;
+
+      const subcategoryKey = expense.subcategoryName || '__none__';
+      const subcategoryName = expense.subcategoryName || 'Sin subcategoría';
+      const subcategoryEmoji = expense.subcategoryEmoji || '';
+
+      if (!categoryGroups[categoryKey].subcategories[subcategoryKey]) {
+        categoryGroups[categoryKey].subcategories[subcategoryKey] = {
+          name: subcategoryName,
+          emoji: subcategoryEmoji,
+          total: 0,
         };
       }
+
+      categoryGroups[categoryKey].subcategories[subcategoryKey].total +=
+        expense.amount;
     }
 
-    const totalExpense = periodExpenses.reduce((sum, m) => sum + m.amount, 0);
-
-    const subcategories = Object.values(subcategoryTotals)
+    // Transform to hierarchical structure with percentage calculations
+    let categories = Object.values(categoryGroups)
       .sort((a, b) => b.total - a.total)
-      .map((sub) => ({
-        ...sub,
-        percentage: totalExpense > 0 ? (sub.total / totalExpense) * 100 : 0,
-      }));
+      .map((cat) => {
+        const categoryPercentage =
+          totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0;
 
-    const categories = Object.values(categoryTotals)
-      .sort((a, b) => b.total - a.total)
-      .map((cat) => ({
-        ...cat,
-        percentage: totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0,
-      }));
+        const children = Object.values(cat.subcategories)
+          .sort((a, b) => b.total - a.total)
+          .map((sub) => ({
+            id: `${cat.name}-${sub.name}`,
+            name: sub.name,
+            percentage: totalExpense > 0 ? (sub.total / totalExpense) * 100 : 0,
+            total: sub.total,
+            color: `${cat.color}99`, // 60% opacity variant
+            emoji: sub.emoji,
+          }));
 
-    return { categories, subcategories, totalExpense };
+        return {
+          id: cat.name,
+          name: cat.name,
+          percentage: categoryPercentage,
+          total: cat.total,
+          color: cat.color,
+          emoji: cat.emoji,
+          children,
+        };
+      });
+
+    // Limit to top 8 categories, group remaining in "Otros"
+    if (categories.length > 8) {
+      const topCategories = categories.slice(0, 8);
+      const remainingCategories = categories.slice(8);
+
+      const othersTotal = remainingCategories.reduce(
+        (sum, cat) => sum + cat.total,
+        0,
+      );
+      const othersPercentage =
+        totalExpense > 0 ? (othersTotal / totalExpense) * 100 : 0;
+
+      // Aggregate all remaining subcategories
+      const othersSubcategories: Record<
+        string,
+        { name: string; emoji: string; total: number }
+      > = {};
+      for (const cat of remainingCategories) {
+        for (const sub of cat.children) {
+          const key = sub.name;
+          if (!othersSubcategories[key]) {
+            othersSubcategories[key] = {
+              name: sub.name,
+              emoji: sub.emoji,
+              total: 0,
+            };
+          }
+          othersSubcategories[key].total += sub.total;
+        }
+      }
+
+      const othersChildren = Object.values(othersSubcategories)
+        .sort((a, b) => b.total - a.total)
+        .map((sub) => ({
+          id: `Otros-${sub.name}`,
+          name: sub.name,
+          percentage: totalExpense > 0 ? (sub.total / totalExpense) * 100 : 0,
+          total: sub.total,
+          color: '#94a3b899', // slate-400 with 60% opacity
+          emoji: sub.emoji,
+        }));
+
+      topCategories.push({
+        id: 'Otros',
+        name: 'Otros',
+        percentage: othersPercentage,
+        total: othersTotal,
+        color: '#94a3b8',
+        emoji: '📦',
+        children: othersChildren,
+      });
+
+      categories = topCategories;
+    }
+
+    return { categories, totalExpense };
   }, [movements, statsPeriod]);
 
   const monthlyExpenseTotal = useMemo(() => {
@@ -1817,128 +1917,7 @@ function Dashboard() {
                   </p>
 
                   <div className="flex flex-col items-center">
-                    <div className="relative h-48 w-48">
-                      <svg
-                        viewBox="0 0 100 100"
-                        className="h-full w-full -rotate-90"
-                      >
-                        <title>Distribución de gastos por categoría</title>
-                        {(() => {
-                          const categories = statsCategoryBreakdown.categories;
-
-                          if (categories.length === 1) {
-                            return (
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                fill={categories[0].color}
-                                stroke="white"
-                                strokeWidth="2"
-                              />
-                            );
-                          }
-
-                          let accumulatedAngle = 0;
-                          return categories.map((cat) => {
-                            const angle = (cat.percentage / 100) * 360;
-                            const startAngle = accumulatedAngle;
-                            accumulatedAngle += angle;
-                            const endAngle = accumulatedAngle;
-
-                            const startRad = (startAngle * Math.PI) / 180;
-                            const endRad = (endAngle * Math.PI) / 180;
-
-                            const x1 = 50 + 40 * Math.cos(startRad);
-                            const y1 = 50 + 40 * Math.sin(startRad);
-                            const x2 = 50 + 40 * Math.cos(endRad);
-                            const y2 = 50 + 40 * Math.sin(endRad);
-
-                            const largeArcFlag = angle > 180 ? 1 : 0;
-
-                            const pathData = [
-                              `M 50 50`,
-                              `L ${x1} ${y1}`,
-                              `A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-                              `Z`,
-                            ].join(' ');
-
-                            return (
-                              <path
-                                key={cat.name}
-                                d={pathData}
-                                fill={cat.color}
-                                stroke="white"
-                                strokeWidth="2"
-                              />
-                            );
-                          });
-                        })()}
-                        <circle cx="50" cy="50" r="20" fill="white" />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-lg font-semibold text-slate-900">
-                          {currencyFormatter.format(
-                            statsCategoryBreakdown.totalExpense,
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 w-full space-y-3">
-                      {statsCategoryBreakdown.categories.map((cat) => (
-                        <div
-                          key={'cat-' + cat.name}
-                          className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3 border-l-4"
-                          style={{ borderLeftColor: cat.color }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-lg"
-                              style={{ backgroundColor: `${cat.color}20` }}
-                            >
-                              {cat.emoji}
-                            </span>
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">
-                                {cat.name}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {cat.percentage.toFixed(1)}% del total
-                              </p>
-                            </div>
-                          </div>
-                          <p className="text-sm font-bold text-slate-900">
-                            {currencyFormatter.format(cat.total)}
-                          </p>
-                        </div>
-                      ))}
-                      {(statsCategoryBreakdown.subcategories || []).length > 0 && (
-                        <div className="mt-2 space-y-2 pl-4 border-l-2 border-slate-200">
-                          {(statsCategoryBreakdown.subcategories || []).map((sub, idx) => (
-                            <div
-                              key={'sub-' + idx}
-                              className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="flex h-6 w-6 items-center justify-center rounded text-sm"
-                                  style={{ backgroundColor: `${sub.color}20` }}
-                                >
-                                  {sub.emoji}
-                                </span>
-                                <p className="text-xs text-slate-700">
-                                  {sub.name}
-                                </p>
-                              </div>
-                              <p className="text-xs font-medium text-slate-600">
-                                {sub.percentage.toFixed(1)}%
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <StackedBarChart data={statsCategoryBreakdown} />
                   </div>
                 </div>
               </section>
