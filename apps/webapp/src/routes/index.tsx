@@ -4,6 +4,8 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import {
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
   House,
   Plus,
   Settings,
@@ -22,6 +24,14 @@ import {
   DrawerTitle,
 } from '../components/ui/drawer';
 import { getApiBase, startAuth } from '../lib/openauth';
+import {
+  getDashboardPeriod,
+  getStatsMonth,
+  getStatsPeriodType,
+  getStatsYear,
+  setStatsPeriod as saveStatsPeriodToStorage,
+  setDashboardPeriod,
+} from '../lib/storage';
 
 dayjs.locale('es');
 
@@ -101,7 +111,7 @@ type DisplayMovement = {
   subcategoryEmoji: string | null;
 };
 
-type Period = 'week' | 'month' | 'year';
+type Period = 'month' | 'year';
 type DashboardView = 'dashboard' | 'stats' | 'profile' | 'settings';
 
 // Sunburst chart types
@@ -409,7 +419,18 @@ function Dashboard() {
   const [claimRequestKey, setClaimRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statsPeriod, setStatsPeriod] = useState<Period>('week');
+  const [statsPeriod, setStatsPeriod] = useState<Period>(() =>
+    getStatsPeriodType(),
+  );
+  const [selectedStatsMonth, setSelectedStatsMonth] = useState<dayjs.Dayjs>(
+    () => getStatsMonth(),
+  );
+  const [selectedStatsYear, setSelectedStatsYear] = useState<number>(() =>
+    getStatsYear(),
+  );
+  const [selectedMonth, setSelectedMonth] = useState<dayjs.Dayjs>(() =>
+    getDashboardPeriod(),
+  );
   const [view, setView] = useState<DashboardView>('dashboard');
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -447,6 +468,66 @@ function Dashboard() {
     );
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    setDashboardPeriod(selectedMonth);
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    const period =
+      statsPeriod === 'month'
+        ? {
+            type: 'month' as const,
+            value: selectedStatsMonth.format('YYYY-MM'),
+          }
+        : { type: 'year' as const, value: String(selectedStatsYear) };
+    saveStatsPeriodToStorage(period);
+  }, [statsPeriod, selectedStatsMonth, selectedStatsYear]);
+
+  const canGoPrev = selectedMonth.isAfter(
+    dayjs().subtract(12, 'month').startOf('month'),
+  );
+  const canGoNext = selectedMonth.isBefore(dayjs().startOf('month'));
+
+  function handlePrevMonth() {
+    if (!canGoPrev) return;
+    setSelectedMonth((prev) => prev.subtract(1, 'month'));
+  }
+
+  function handleNextMonth() {
+    if (!canGoNext) return;
+    setSelectedMonth((prev) => prev.add(1, 'month'));
+  }
+
+  const canGoStatsMonthPrev = selectedStatsMonth.isAfter(
+    dayjs().subtract(12, 'month').startOf('month'),
+  );
+  const canGoStatsMonthNext = selectedStatsMonth.isBefore(
+    dayjs().startOf('month'),
+  );
+
+  function handleStatsMonthPrev() {
+    if (!canGoStatsMonthPrev) return;
+    setSelectedStatsMonth((prev) => prev.subtract(1, 'month'));
+  }
+
+  function handleStatsMonthNext() {
+    if (!canGoStatsMonthNext) return;
+    setSelectedStatsMonth((prev) => prev.add(1, 'month'));
+  }
+
+  const canGoStatsYearPrev = selectedStatsYear > dayjs().year() - 5;
+  const canGoStatsYearNext = selectedStatsYear < dayjs().year() + 5;
+
+  function handleStatsYearPrev() {
+    if (!canGoStatsYearPrev) return;
+    setSelectedStatsYear((prev) => prev - 1);
+  }
+
+  function handleStatsYearNext() {
+    if (!canGoStatsYearNext) return;
+    setSelectedStatsYear((prev) => prev + 1);
+  }
 
   const claimMutation = useMutation<
     void,
@@ -751,13 +832,12 @@ function Dashboard() {
   );
 
   const dashboardMovements = useMemo(() => {
-    const now = new Date();
     return movements.filter(
       (movement) =>
-        movement.date.getFullYear() === now.getFullYear() &&
-        movement.date.getMonth() === now.getMonth(),
+        movement.date.getFullYear() === selectedMonth.year() &&
+        movement.date.getMonth() === selectedMonth.month(),
     );
-  }, [movements]);
+  }, [movements, selectedMonth]);
 
   const groupedMovements = useMemo(() => {
     type Group = {
@@ -787,7 +867,6 @@ function Dashboard() {
   }, [dashboardMovements]);
 
   const statsPeriodExpenses = useMemo(() => {
-    const now = new Date();
     const monthLabels = [
       'Ene',
       'Feb',
@@ -803,62 +882,15 @@ function Dashboard() {
       'Dic',
     ];
 
-    if (statsPeriod === 'week') {
-      const day = now.getDay();
-      const diffToMonday = day === 0 ? 6 : day - 1;
-
-      const startOfCurrentWeek = new Date(now);
-      startOfCurrentWeek.setHours(0, 0, 0, 0);
-      startOfCurrentWeek.setDate(now.getDate() - diffToMonday);
-
-      const startOfPreviousWeek = new Date(startOfCurrentWeek);
-      startOfPreviousWeek.setDate(startOfCurrentWeek.getDate() - 7);
-
-      const endOfCurrentWeek = new Date(startOfCurrentWeek);
-      endOfCurrentWeek.setDate(startOfCurrentWeek.getDate() + 7);
-
-      const labels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-      const dayTotals = new Array(7).fill(0) as number[];
-      let currentTotal = 0;
-      let previousTotal = 0;
-
-      for (const movement of movements) {
-        if (movement.type !== 'expense') continue;
-
-        if (
-          movement.date >= startOfCurrentWeek &&
-          movement.date < endOfCurrentWeek
-        ) {
-          currentTotal += movement.amount;
-          const weekday = movement.date.getDay();
-          const index = weekday === 0 ? 6 : weekday - 1;
-          dayTotals[index] += movement.amount;
-        }
-
-        if (
-          movement.date >= startOfPreviousWeek &&
-          movement.date < startOfCurrentWeek
-        ) {
-          previousTotal += movement.amount;
-        }
-      }
-
-      return {
-        labels,
-        dayTotals,
-        highest: Math.max(...dayTotals, 1),
-        currentTotal,
-        previousTotal,
-        summaryLabel: 'semana',
-      };
-    }
-
     if (statsPeriod === 'month') {
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const previousMonthDate = new Date(currentYear, currentMonth - 1, 1);
-      const previousYear = previousMonthDate.getFullYear();
-      const previousMonth = previousMonthDate.getMonth();
+      const currentYear = selectedStatsMonth.year();
+      const currentMonth = selectedStatsMonth.month();
+      const previousMonthDate = dayjs()
+        .year(currentYear)
+        .month(currentMonth)
+        .subtract(1, 'month');
+      const previousYear = previousMonthDate.year();
+      const previousMonth = previousMonthDate.month();
       const labels = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5'];
       const dayTotals = new Array(5).fill(0) as number[];
       let currentTotal = 0;
@@ -892,7 +924,7 @@ function Dashboard() {
       };
     }
 
-    const currentYear = now.getFullYear();
+    const currentYear = selectedStatsYear;
     const previousYear = currentYear - 1;
     const dayTotals = new Array(12).fill(0) as number[];
     let currentTotal = 0;
@@ -921,7 +953,7 @@ function Dashboard() {
       previousTotal,
       summaryLabel: 'año',
     };
-  }, [movements, statsPeriod]);
+  }, [movements, statsPeriod, selectedStatsMonth, selectedStatsYear]);
 
   const statsPeriodChange = useMemo(() => {
     const { currentTotal, previousTotal } = statsPeriodExpenses;
@@ -932,33 +964,19 @@ function Dashboard() {
   }, [statsPeriodExpenses]);
 
   const statsCategoryBreakdown = useMemo<SunburstData>(() => {
-    const now = new Date();
     let periodExpenses: DisplayMovement[] = [];
 
-    if (statsPeriod === 'week') {
-      const day = now.getDay();
-      const diffToMonday = day === 0 ? 6 : day - 1;
-      const startOfWeek = new Date(now);
-      startOfWeek.setHours(0, 0, 0, 0);
-      startOfWeek.setDate(now.getDate() - diffToMonday);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 7);
-
-      periodExpenses = movements.filter(
-        (m) =>
-          m.type === 'expense' && m.date >= startOfWeek && m.date < endOfWeek,
-      );
-    } else if (statsPeriod === 'month') {
+    if (statsPeriod === 'month') {
       periodExpenses = movements.filter(
         (m) =>
           m.type === 'expense' &&
-          m.date.getFullYear() === now.getFullYear() &&
-          m.date.getMonth() === now.getMonth(),
+          m.date.getFullYear() === selectedStatsMonth.year() &&
+          m.date.getMonth() === selectedStatsMonth.month(),
       );
     } else {
       periodExpenses = movements.filter(
         (m) =>
-          m.type === 'expense' && m.date.getFullYear() === now.getFullYear(),
+          m.type === 'expense' && m.date.getFullYear() === selectedStatsYear,
       );
     }
 
@@ -1109,43 +1127,40 @@ function Dashboard() {
     }
 
     return { categories, totalExpense };
-  }, [movements, statsPeriod]);
+  }, [movements, statsPeriod, selectedStatsMonth, selectedStatsYear]);
 
   const monthlyExpenseTotal = useMemo(() => {
-    const now = new Date();
     return movements
       .filter(
         (movement) =>
           movement.type === 'expense' &&
-          movement.date.getFullYear() === now.getFullYear() &&
-          movement.date.getMonth() === now.getMonth(),
+          movement.date.getFullYear() === selectedMonth.year() &&
+          movement.date.getMonth() === selectedMonth.month(),
       )
       .reduce((sum, movement) => sum + movement.amount, 0);
-  }, [movements]);
+  }, [movements, selectedMonth]);
 
   const monthlyIncomeTotal = useMemo(() => {
-    const now = new Date();
     return movements
       .filter(
         (movement) =>
           movement.type === 'income' &&
-          movement.date.getFullYear() === now.getFullYear() &&
-          movement.date.getMonth() === now.getMonth(),
+          movement.date.getFullYear() === selectedMonth.year() &&
+          movement.date.getMonth() === selectedMonth.month(),
       )
       .reduce((sum, movement) => sum + movement.amount, 0);
-  }, [movements]);
+  }, [movements, selectedMonth]);
 
   const netBalance = useMemo(() => {
     return monthlyIncomeTotal - monthlyExpenseTotal;
   }, [monthlyIncomeTotal, monthlyExpenseTotal]);
 
   const topMonthlyCategories = useMemo(() => {
-    const now = new Date();
     const monthlyExpenses = movements.filter(
       (m) =>
         m.type === 'expense' &&
-        m.date.getFullYear() === now.getFullYear() &&
-        m.date.getMonth() === now.getMonth(),
+        m.date.getFullYear() === selectedMonth.year() &&
+        m.date.getMonth() === selectedMonth.month(),
     );
 
     const categoryTotals: Record<
@@ -1175,7 +1190,7 @@ function Dashboard() {
         ...cat,
         percentage: totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0,
       }));
-  }, [movements]);
+  }, [movements, selectedMonth]);
 
   const monthlyLimit = useMemo(() => {
     const raw = data?.board.spendingLimitAmount;
@@ -1616,6 +1631,28 @@ function Dashboard() {
               {data.board.name}
             </p>
 
+            <div className="mb-6 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                disabled={!canGoPrev}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[120px] text-center text-sm font-semibold text-slate-900">
+                {selectedMonth.format('MMMM YYYY')}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                disabled={!canGoNext}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
             <section className="mb-6">
               <div
                 className={`relative rounded-[28px] border px-5 py-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ${
@@ -1830,6 +1867,79 @@ function Dashboard() {
               Estadísticas
             </p>
 
+            {/* Period Selector - Date picker on left, tabs on right */}
+            <div className="mb-6 flex items-center justify-between gap-4">
+              {/* Date/Year Picker - left aligned */}
+              {statsPeriod === 'month' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStatsMonthPrev}
+                    disabled={!canGoStatsMonthPrev}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[120px] text-center text-sm font-semibold text-slate-900">
+                    {selectedStatsMonth.format('MMMM YYYY')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleStatsMonthNext}
+                    disabled={!canGoStatsMonthNext}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {statsPeriod === 'year' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStatsYearPrev}
+                    disabled={!canGoStatsYearPrev}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[80px] text-center text-sm font-semibold text-slate-900">
+                    {selectedStatsYear}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleStatsYearNext}
+                    disabled={!canGoStatsYearNext}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Period Tabs - right aligned */}
+              <div className="flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
+                {(['month', 'year'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setStatsPeriod(option);
+                    }}
+                    className={`flex-1 rounded-xl px-3 py-2 capitalize transition-colors ${
+                      statsPeriod === option
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {option === 'month' ? 'Mes' : 'Año'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* End Period Selector */}
+
             <section className="mb-6">
               <div className="relative rounded-[28px] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
                 {isRefreshingDashboard && (
@@ -1878,29 +1988,6 @@ function Dashboard() {
                         {statsPeriodExpenses.labels[index]}
                       </p>
                     </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 flex rounded-2xl bg-slate-100 p-1 text-sm font-medium">
-                  {(['week', 'month', 'year'] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setStatsPeriod(option);
-                      }}
-                      className={`flex-1 rounded-xl px-2 py-2 capitalize transition-colors ${
-                        statsPeriod === option
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      {option === 'week'
-                        ? 'Semana'
-                        : option === 'month'
-                          ? 'Mes'
-                          : 'Año'}
-                    </button>
                   ))}
                 </div>
               </div>
