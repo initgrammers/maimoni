@@ -459,6 +459,11 @@ function Dashboard() {
   >(null);
   const [showDeleteBoardConfirm, setShowDeleteBoardConfirm] = useState(false);
   const [boardActionError, setBoardActionError] = useState<string | null>(null);
+  const [_isShareModalOpen, _setIsShareModalOpen] = useState(false);
+  const [_shareRole, _setShareRole] = useState<'editor' | 'viewer'>('editor');
+  const [_sharePhone, _setSharePhone] = useState('');
+  const [_shareError, _setShareError] = useState<string | null>(null);
+  const [_shareSuccess, _setShareSuccess] = useState<string | null>(null);
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
     setAnonymousId(window.localStorage.getItem('anonymousId'));
@@ -685,6 +690,52 @@ function Dashboard() {
 
       await queryClient.invalidateQueries({
         queryKey: ['board-invitations', accessToken, data.board.id],
+      });
+    },
+  });
+
+  const _boardDrawerInvitationsQuery = useQuery<BoardInvitation[], Error>({
+    queryKey:
+      accessToken && selectedBoardForDrawer?.id
+        ? ([
+            'board-drawer-invitations',
+            accessToken,
+            selectedBoardForDrawer.id,
+          ] as const)
+        : (['board-drawer-invitations', 'guest'] as const),
+    queryFn: () => {
+      if (!accessToken || !selectedBoardForDrawer?.id) {
+        throw new Error('No hay tablero seleccionado');
+      }
+
+      return fetchBoardInvitations(accessToken, selectedBoardForDrawer.id);
+    },
+    enabled: Boolean(accessToken && selectedBoardForDrawer?.id),
+  });
+
+  const _boardDrawerRevokeMutation = useMutation<
+    void,
+    Error,
+    { invitationId: string }
+  >({
+    mutationFn: ({ invitationId }) => {
+      if (!accessToken) {
+        throw new Error('Sesión no disponible');
+      }
+
+      return revokeInvitation(accessToken, invitationId);
+    },
+    onSuccess: async () => {
+      if (!accessToken || !selectedBoardForDrawer?.id) {
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'board-drawer-invitations',
+          accessToken,
+          selectedBoardForDrawer.id,
+        ],
       });
     },
   });
@@ -2028,123 +2079,6 @@ function Dashboard() {
                 activeBoardId={data.board.id}
                 onBoardTap={openBoardDetails}
               />
-              {data.role !== 'viewer' && (
-                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                  <div>
-                    <p className="text-base font-semibold text-slate-900">
-                      Miembros e invitaciones
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      Crea un enlace y compártelo para sumar personas a este
-                      tablero.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="space-y-1 text-sm text-slate-600">
-                      <span>Rol</span>
-                      <select
-                        value={inviteRole}
-                        onChange={(event) =>
-                          setInviteRole(
-                            event.target.value as 'editor' | 'viewer',
-                          )
-                        }
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                      >
-                        <option value="editor">Editor</option>
-                        <option value="viewer">Viewer</option>
-                      </select>
-                    </label>
-                    <label className="space-y-1 text-sm text-slate-600">
-                      <span>Duración (horas)</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={inviteTtlHours}
-                        onChange={(event) =>
-                          setInviteTtlHours(event.target.value)
-                        }
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                    </label>
-                  </div>
-                  <label className="space-y-1 text-sm text-slate-600">
-                    <span>Teléfono (opcional)</span>
-                    <input
-                      type="text"
-                      value={invitePhoneNumber}
-                      onChange={(event) =>
-                        setInvitePhoneNumber(event.target.value)
-                      }
-                      placeholder="Ej: +593999999999"
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void createInvitationLink();
-                    }}
-                    disabled={createInvitationMutation.isPending}
-                    className="mt-2 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {createInvitationMutation.isPending
-                      ? 'Creando...'
-                      : 'Crear enlace de invitación'}
-                  </button>
-
-                  {inviteSuccess && (
-                    <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                      {inviteSuccess}
-                    </p>
-                  )}
-                  {inviteError && (
-                    <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                      {inviteError}
-                    </p>
-                  )}
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-700">
-                      Invitaciones pendientes ({pendingInvitations.length})
-                    </p>
-                    {invitationsQuery.isPending ? (
-                      <p className="text-sm text-slate-500">
-                        Cargando invitaciones...
-                      </p>
-                    ) : pendingInvitations.length === 0 ? (
-                      <p className="text-sm text-slate-500">
-                        No hay invitaciones pendientes.
-                      </p>
-                    ) : (
-                      pendingInvitations.slice(0, 8).map((invitation) => (
-                        <div
-                          key={invitation.id}
-                          className="rounded-xl border border-slate-200 bg-white p-3"
-                        >
-                          <p className="text-sm font-medium text-slate-800">
-                            {invitation.invitedPhoneNumber ||
-                              'Enlace compartido'}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            rol {invitation.targetRole}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void revokeInvitationById(invitation.id);
-                            }}
-                            disabled={revokeInvitationMutation.isPending}
-                            className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-60"
-                          >
-                            Eliminar invitación
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
               <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <p className="text-sm text-slate-500">
                   Si necesitas proteger tu dispositivo o cerrar sesión remota,
@@ -2599,6 +2533,56 @@ function Dashboard() {
               </div>
             )}
 
+            {selectedBoardForDrawer &&
+              _boardDrawerInvitationsQuery.data &&
+              _boardDrawerInvitationsQuery.data.filter(
+                (i) => i.status === 'pending',
+              ).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-700">
+                    Invitaciones pendientes (
+                    {
+                      _boardDrawerInvitationsQuery.data.filter(
+                        (i) => i.status === 'pending',
+                      ).length
+                    }
+                    )
+                  </p>
+                  {_boardDrawerInvitationsQuery.data
+                    .filter((i) => i.status === 'pending')
+                    .map((invitation) => (
+                      <div
+                        key={invitation.id}
+                        className="rounded-xl border border-slate-200 bg-white p-3"
+                      >
+                        <p className="text-sm font-medium text-slate-800">
+                          {invitation.invitedPhoneNumber || 'Enlace compartido'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          rol {invitation.targetRole}
+                        </p>
+                        {(selectedBoardForDrawer.role === 'owner' ||
+                          selectedBoardForDrawer.role === 'editor') && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void _boardDrawerRevokeMutation.mutateAsync({
+                                invitationId: invitation.id,
+                              })
+                            }
+                            disabled={_boardDrawerRevokeMutation.isPending}
+                            className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                          >
+                            {_boardDrawerRevokeMutation.isPending
+                              ? 'Eliminando...'
+                              : 'Eliminar invitación'}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
+
             {showDeleteBoardConfirm && selectedBoardForDrawer && (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
                 Se eliminarán todos los gastos e ingresos de este tablero. Esta
@@ -2674,6 +2658,16 @@ function Dashboard() {
                     Editar tablero
                   </button>
                 )}
+                {(selectedBoardForDrawer.role === 'owner' ||
+                  selectedBoardForDrawer.role === 'editor') && (
+                  <button
+                    type="button"
+                    onClick={() => _setIsShareModalOpen(true)}
+                    className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700 transition-all active:scale-[0.98]"
+                  >
+                    Compartir tablero
+                  </button>
+                )}
                 {selectedBoardForDrawer.role === 'owner' &&
                   data &&
                   data.boards.length > 1 && (
@@ -2698,6 +2692,115 @@ function Dashboard() {
                 </DrawerClose>
               </>
             )}
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer
+        open={_isShareModalOpen}
+        onOpenChange={(open) => {
+          _setIsShareModalOpen(open);
+          if (!open) {
+            _setShareError(null);
+            _setShareSuccess(null);
+          }
+        }}
+      >
+        <DrawerContent>
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Compartir tablero</DrawerTitle>
+            <DrawerDescription>
+              Comparte &quot;{selectedBoardForDrawer?.name}&quot; con otros
+              usuarios.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-4">
+            <label className="mb-3 block space-y-1 text-sm text-slate-600">
+              <span>Rol</span>
+              <select
+                value={_shareRole}
+                onChange={(e) =>
+                  _setShareRole(e.target.value as 'editor' | 'viewer')
+                }
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="editor">Editor</option>
+                <option value="viewer">Visor</option>
+              </select>
+            </label>
+
+            <label className="mb-4 block space-y-1 text-sm text-slate-600">
+              <span>Teléfono (opcional)</span>
+              <input
+                type="text"
+                value={_sharePhone}
+                onChange={(e) => _setSharePhone(e.target.value)}
+                placeholder="Ej: +593999999999"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+
+            {_shareError && (
+              <p className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {_shareError}
+              </p>
+            )}
+            {_shareSuccess && (
+              <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {_shareSuccess}
+              </p>
+            )}
+          </div>
+          <DrawerFooter>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!selectedBoardForDrawer) return;
+                _setShareError(null);
+                _setShareSuccess(null);
+                try {
+                  const result = await createInvitationMutation.mutateAsync({
+                    boardId: selectedBoardForDrawer.id,
+                    targetRole: _shareRole,
+                    phoneNumber: _sharePhone.trim() || undefined,
+                    ttlHours: 72,
+                  });
+                  const inviteUrl = `${
+                    window.location.origin
+                  }/invite?token=${encodeURIComponent(result.inviteToken)}`;
+                  try {
+                    await navigator.clipboard.writeText(inviteUrl);
+                    _setShareSuccess(
+                      'Invitación creada y copiada al portapapeles',
+                    );
+                  } catch {
+                    _setShareSuccess(`Invitación creada: ${inviteUrl}`);
+                  }
+                  _boardDrawerInvitationsQuery.refetch();
+                  setTimeout(() => _setIsShareModalOpen(false), 1500);
+                } catch (err) {
+                  _setShareError(
+                    err instanceof Error
+                      ? err.message
+                      : 'Error al crear invitación',
+                  );
+                }
+              }}
+              disabled={createInvitationMutation.isPending}
+              className="w-full rounded-[20px] bg-slate-900 py-4 text-base font-semibold text-white disabled:opacity-60"
+            >
+              {createInvitationMutation.isPending
+                ? 'Creando...'
+                : 'Crear invitación'}
+            </button>
+            <DrawerClose asChild>
+              <button
+                type="button"
+                className="w-full rounded-[20px] border border-slate-300 bg-white py-4 text-base font-semibold text-slate-700"
+              >
+                Cancelar
+              </button>
+            </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
