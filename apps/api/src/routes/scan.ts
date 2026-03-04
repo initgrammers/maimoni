@@ -87,6 +87,16 @@ export function createScanRouter({ db }: ApiDeps) {
         );
       }
 
+      // Log the failure before returning
+      const logger = c.get('wide-logger');
+      if (logger) {
+        logger.addError(new Error(scanResult.error), {
+          code: 'SCAN_FAILED',
+          context: 'receipt_scan',
+          status: scanResult.status,
+        });
+      }
+
       return c.json({ error: scanResult.error }, 500);
     } catch (error) {
       const logger = c.get('wide-logger');
