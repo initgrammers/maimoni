@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +19,11 @@ import { Route as IncomesIncomeIdEditRouteImport } from './routes/incomes.$incom
 import { Route as ExpensesExpenseIdEditRouteImport } from './routes/expenses.$expenseId.edit'
 import { Route as BoardsBoardIdEditRouteImport } from './routes/boards.$boardId.edit'
 
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InviteRoute = InviteRouteImport.update({
   id: '/invite',
   path: '/invite',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRouteWithChildren
   '/invite': typeof InviteRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/add/income': typeof AddIncomeRoute
   '/callback/auth': typeof CallbackAuthRoute
   '/boards/$boardId/edit': typeof BoardsBoardIdEditRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRouteWithChildren
   '/invite': typeof InviteRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/add/income': typeof AddIncomeRoute
   '/callback/auth': typeof CallbackAuthRoute
   '/boards/$boardId/edit': typeof BoardsBoardIdEditRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/add': typeof AddRouteWithChildren
   '/invite': typeof InviteRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/add/income': typeof AddIncomeRoute
   '/callback/auth': typeof CallbackAuthRoute
   '/boards/$boardId/edit': typeof BoardsBoardIdEditRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/add'
     | '/invite'
+    | '/privacy-policy'
     | '/add/income'
     | '/callback/auth'
     | '/boards/$boardId/edit'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/add'
     | '/invite'
+    | '/privacy-policy'
     | '/add/income'
     | '/callback/auth'
     | '/boards/$boardId/edit'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/add'
     | '/invite'
+    | '/privacy-policy'
     | '/add/income'
     | '/callback/auth'
     | '/boards/$boardId/edit'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRouteWithChildren
   InviteRoute: typeof InviteRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   CallbackAuthRoute: typeof CallbackAuthRoute
   BoardsBoardIdEditRoute: typeof BoardsBoardIdEditRoute
   ExpensesExpenseIdEditRoute: typeof ExpensesExpenseIdEditRoute
@@ -135,6 +148,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invite': {
       id: '/invite'
       path: '/invite'
@@ -208,6 +228,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRouteWithChildren,
   InviteRoute: InviteRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
   CallbackAuthRoute: CallbackAuthRoute,
   BoardsBoardIdEditRoute: BoardsBoardIdEditRoute,
   ExpensesExpenseIdEditRoute: ExpensesExpenseIdEditRoute,
