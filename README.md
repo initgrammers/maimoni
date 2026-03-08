@@ -73,8 +73,8 @@ LLAMA_CLOUD_API_KEY='tu_llama_cloud_api_key'
 # Twilio - Requerido para autenticación vía WhatsApp/SMS
 TWILIO_ACCOUNT_SID='tu_account_sid'
 TWILIO_AUTH_TOKEN='tu_auth_token'
+TWILIO_MESSAGING_SERVICE_SID='tu_messaging_service_sid'
 TWILIO_WHATSAPP_NUMBER='whatsapp:+1234567890'
-TWILIO_PHONE_NUMBER='+1234567890'
 ```
 
 > **Nota**: Puedes dejar las variables opcionales con valores fake (`fake_groq_key`, etc.) y la app funcionará, pero:

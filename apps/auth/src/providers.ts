@@ -6,7 +6,7 @@ import { getEnv } from '../../../packages/utils/src/index';
 // 'whatsapp' = Envio por WhatsApp (produccion)
 // 'sms' = Envio por SMS (fallback/testing)
 // 'beta' = Modo beta - muestra mensaje de contacto a Henry
-export const AUTH_CHANNEL = 'beta' as 'whatsapp' | 'sms' | 'beta';
+export const AUTH_CHANNEL = 'sms' as 'whatsapp' | 'sms' | 'beta';
 
 function getTwilioClient() {
   const accountSid = getEnv('TWILIO_ACCOUNT_SID');
@@ -44,14 +44,14 @@ async function sendWhatsAppCode(phoneNumber: string, code: string) {
 }
 
 async function sendSMSCode(phoneNumber: string, code: string) {
-  const twilioPhoneNumber = getEnv('TWILIO_PHONE_NUMBER');
+  const messagingServiceSid = getEnv('TWILIO_MESSAGING_SERVICE_SID');
 
   const twilioClient = getTwilioClient();
   const ecuadorPhoneNumber = toEcuadorPhoneNumber(phoneNumber);
 
   await twilioClient.messages.create({
-    body: `Tu codigo de verificacion para Maimonei es: ${code}`,
-    from: twilioPhoneNumber,
+    body: `Tu codigo de verificacion para Maimoni es: ${code}`,
+    messagingServiceSid,
     to: ecuadorPhoneNumber,
   });
 }
