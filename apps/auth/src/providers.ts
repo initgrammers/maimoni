@@ -1,6 +1,7 @@
-import { CodeProvider, CodeUI, type Provider } from '@maimoni/auth';
+import { CodeProvider, type Provider } from '@maimoni/auth';
 import twilio from 'twilio';
 import { getEnv } from '../../../packages/utils/src/index';
+import { CustomCodeUI } from './custom-code-ui';
 
 // Feature Flag: Selecciona el canal de envio de codigos
 // 'whatsapp' = Envio por WhatsApp (produccion)
@@ -19,14 +20,21 @@ function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
-function toEcuadorPhoneNumber(input: string) {
+function normalizePhoneNumber(input: string) {
   const normalized = input.trim();
+  // Already has country code
   if (normalized.startsWith('+')) {
     return normalized;
   }
 
   const digits = normalized.replace(/\D/g, '');
+  // If starts with country code (54, 593)
+  if (digits.startsWith('54') || digits.startsWith('593')) {
+    return `+${digits}`;
+  }
+  // If starts with 0, remove it
   const local = digits.startsWith('0') ? digits.slice(1) : digits;
+  // Default to Ecuador
   return `+593${local}`;
 }
 
@@ -34,7 +42,7 @@ async function sendWhatsAppCode(phoneNumber: string, code: string) {
   const whatsappNumber = getEnv('TWILIO_WHATSAPP_NUMBER');
 
   const twilioClient = getTwilioClient();
-  const ecuadorPhoneNumber = toEcuadorPhoneNumber(phoneNumber);
+  const ecuadorPhoneNumber = normalizePhoneNumber(phoneNumber);
 
   await twilioClient.messages.create({
     body: `Tu codigo de verificacion para Maimonei es: ${code}`,
@@ -47,7 +55,7 @@ async function sendSMSCode(phoneNumber: string, code: string) {
   const messagingServiceSid = getEnv('TWILIO_MESSAGING_SERVICE_SID');
 
   const twilioClient = getTwilioClient();
-  const ecuadorPhoneNumber = toEcuadorPhoneNumber(phoneNumber);
+  const ecuadorPhoneNumber = normalizePhoneNumber(phoneNumber);
 
   await twilioClient.messages.create({
     body: `Tu codigo de verificacion para Maimoni es: ${code}`,
@@ -109,14 +117,10 @@ function getCodeInfoMessage(): string {
 }
 
 export const WhatsAppCodeProvider = CodeProvider(
-  CodeUI({
-    mode: 'phone',
-    copy: {
-      email_placeholder: 'Telefono',
-      code_info: getCodeInfoMessage(),
-      code_sent:
-        'Estamos en modo beta. Consulte el código con Henry Villavicencio +593 978 847 449',
-    },
+  CustomCodeUI({
+    codeInfo: getCodeInfoMessage(),
+    buttonText: 'Enviar código',
+    placeholder: '0981234567',
     sendCode: async (claims, code) => {
       const phoneNumber = claims.phone ?? claims.phoneNumber;
       if (!phoneNumber) throw new Error('Phone number is required');

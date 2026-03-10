@@ -3,7 +3,11 @@ export {
   createOpenAuthClient,
   normalizeAuthIssuer,
 } from './client';
-export type { AuthorizationState, Provider } from './server';
+export type {
+  AuthorizationState,
+  CodeProviderOptions,
+  Provider,
+} from './server';
 export {
   CodeProvider,
   CodeUI,
@@ -11,4 +15,5 @@ export {
   getSubjectIdFromAccessToken,
   issuer,
   subjectFromPhone,
+  UnknownStateError,
 } from './server';

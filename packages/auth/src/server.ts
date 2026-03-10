@@ -8,7 +8,9 @@ import {
 } from '@openauthjs/openauth/storage/memory';
 
 export { issuer } from '@openauthjs/openauth';
+export { UnknownStateError } from '@openauthjs/openauth/error';
 export type { AuthorizationState } from '@openauthjs/openauth/issuer';
+export type { CodeProviderOptions } from '@openauthjs/openauth/provider/code';
 export { CodeProvider } from '@openauthjs/openauth/provider/code';
 export type { Provider } from '@openauthjs/openauth/provider/provider';
 export { CodeUI } from '@openauthjs/openauth/ui/code';
