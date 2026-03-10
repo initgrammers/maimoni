@@ -33,6 +33,7 @@ export function getAnonymousToken(): string | null {
  * Check if the app is in local mode (has anonymousId but no accessToken)
  */
 export function isLocalMode(): boolean {
+  if (typeof window === 'undefined') return false;
   const anonymousId = getAnonymousId();
   const accessToken = localStorage.getItem('accessToken');
   return !!anonymousId && !accessToken;
@@ -106,6 +107,8 @@ export function clearAnonymousData(): void {
  * Returns null if not in local mode
  */
 export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  
   // First check for authenticated token
   const accessToken = localStorage.getItem('accessToken');
   if (accessToken) {
