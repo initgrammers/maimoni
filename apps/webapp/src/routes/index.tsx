@@ -1573,52 +1573,6 @@ function Dashboard() {
     }
   }, [isIncomeDrawerOpen, selectedIncome]);
 
-  if (!accessToken && !isLocalMode()) {
-    return (
-      <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
-        <div className="mx-auto flex min-h-[78vh] w-full max-w-md items-center">
-          <div className="w-full rounded-[28px] border border-slate-200 bg-white px-6 py-7 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-            <div className="mb-6 text-center">
-              <h1 className="mb-2 text-lg font-semibold uppercase tracking-wide text-emerald-700">
-                Bienvenido a
-              </h1>
-              <img
-                src="/img/maimoni.png"
-                alt="Maimoni"
-                className="mx-auto mb-3 h-28 w-auto object-contain"
-              />
-            </div>
-
-            <div className="space-y-3">
-              <button
-                className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-all active:scale-95 disabled:opacity-60"
-                onClick={continueAsAnonymous}
-                type="button"
-                disabled={loading}
-              >
-                {loading ? 'Cargando...' : 'Continuar sin cuenta'}
-              </button>
-              <button
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition-all active:scale-95 disabled:opacity-60"
-                onClick={loginAndClaim}
-                type="button"
-                disabled={loading}
-              >
-                Iniciar sesión con número de teléfono
-              </button>
-            </div>
-
-            <p className="mt-4 text-center text-xs text-slate-500">
-              Puedes usar la app sin cuenta. Si inicias sesión, tus datos se
-              guardan y sincronizan entre dispositivos.
-            </p>
-            {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (!data) {
     if (dashboardQuery.error || error) {
       return (
