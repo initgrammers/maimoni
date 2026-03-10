@@ -70,7 +70,7 @@ export async function getOrCreateInitialBoard(
 
 export async function claimAnonymousData(
   db: DbLike,
-  { realUserId, anonymousId }: { realUserId: string; anonymousId: string },
+  { realUserId, anonymousId, expenses, incomes }: { realUserId: string; anonymousId: string; expenses?: unknown[]; incomes?: unknown[] },
 ) {
   const runClaim = async (client: DbLike) => {
     const [anonUser] = await client

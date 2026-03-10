@@ -4,6 +4,8 @@ import type { AuthClaimRepository } from './ports';
 export type ClaimAnonymousDataInput = {
   actorId: string;
   anonymousId: string;
+  expenses?: unknown[];
+  incomes?: unknown[];
 };
 
 export type ClaimAnonymousDataResult =
@@ -31,6 +33,8 @@ export function createClaimAnonymousData(deps: {
       await authClaimRepository.claimAnonymousData({
         realUserId: input.actorId,
         anonymousId: input.anonymousId,
+        expenses: input.expenses,
+        incomes: input.incomes,
       });
 
       return { status: 'claimed' };

@@ -24,6 +24,9 @@ import {
   DrawerTitle,
 } from '../components/ui/drawer';
 import { getApiBase, startAuth } from '../lib/openauth';
+import { getLocalExpenses, getLocalIncomes, createLocalExpense, deleteLocalExpense, isExpenseLocalMode } from '@/lib/expense-service';
+import { createLocalIncome, deleteLocalIncome, isIncomeLocalMode } from '@/lib/income-service';
+import { initializeAnonymousUser, getAnonymousId, getAnonymousToken, isLocalMode, getAuthToken, clearAnonymousData } from '@/lib/anonymous';
 import {
   getDashboardPeriod,
   getStatsMonth,
@@ -472,6 +475,21 @@ function Dashboard() {
       window.localStorage.getItem('pendingClaimAnonymousId'),
     );
     setIsHydrated(true);
+    // Initialize anonymous user if in local mode
+    const handleLocalMode = async () => {
+      const anonId = getAnonymousId();
+      const token = getAnonymousToken();
+
+      if (!anonId) {
+        // No anonymous ID - create new anonymous user
+        const result = await initializeAnonymousUser();
+        if (result) {
+          setAnonymousId(result.anonymousId);
+        }
+      }
+    };
+
+    handleLocalMode();
   }, []);
 
   useEffect(() => {
@@ -589,7 +607,7 @@ function Dashboard() {
       ? ([...dashboardQueryKey(accessToken), selectedBoardId] as const)
       : (['dashboard', 'guest'] as const),
     queryFn: () => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         throw new Error('Falta el token de acceso');
       }
       return fetchDashboard(accessToken, selectedBoardId);
@@ -650,7 +668,7 @@ function Dashboard() {
     }
   >({
     mutationFn: ({ boardId, targetRole, ttlHours, phoneNumber }) => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         throw new Error('Sesión no disponible');
       }
 
@@ -677,7 +695,7 @@ function Dashboard() {
     { invitationId: string }
   >({
     mutationFn: ({ invitationId }) => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         throw new Error('Sesión no disponible');
       }
 
@@ -719,7 +737,7 @@ function Dashboard() {
     { invitationId: string }
   >({
     mutationFn: ({ invitationId }) => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         throw new Error('Sesión no disponible');
       }
 
@@ -743,14 +761,14 @@ function Dashboard() {
   const deleteExpenseMutation = useMutation<void, Error, { expenseId: string }>(
     {
       mutationFn: ({ expenseId }) => {
-        if (!accessToken) {
+        if (!accessToken && !isLocalMode()) {
           throw new Error('Sesión no disponible');
         }
 
         return removeExpense(accessToken, expenseId);
       },
       onSuccess: async () => {
-        if (!accessToken) {
+        if (!accessToken && !isLocalMode()) {
           return;
         }
 
@@ -763,14 +781,14 @@ function Dashboard() {
 
   const deleteIncomeMutation = useMutation<void, Error, { incomeId: string }>({
     mutationFn: ({ incomeId }) => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         throw new Error('Sesión no disponible');
       }
 
       return removeIncome(accessToken, incomeId);
     },
     onSuccess: async () => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         return;
       }
 
@@ -782,7 +800,7 @@ function Dashboard() {
 
   const deleteBoardMutation = useMutation<void, Error, { boardId: string }>({
     mutationFn: ({ boardId }) => {
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         throw new Error('Sesión no disponible');
       }
 
@@ -797,7 +815,7 @@ function Dashboard() {
 
       handleBoardDrawerOpenChange(false);
 
-      if (!accessToken) {
+      if (!accessToken && !isLocalMode()) {
         return;
       }
 
@@ -1555,7 +1573,7 @@ function Dashboard() {
     }
   }, [isIncomeDrawerOpen, selectedIncome]);
 
-  if (!accessToken) {
+  if (!accessToken && !isLocalMode()) {
     return (
       <div className="min-h-screen bg-[#f7f7f5] px-5 py-10 text-slate-900">
         <div className="mx-auto flex min-h-[78vh] w-full max-w-md items-center">

@@ -2,26 +2,26 @@
 
 ## Phase 1: Infrastructure - Storage Types and Anonymous User Initialization
 
-- [ ] 1.1 Create `apps/webapp/src/lib/storage-types.ts` with LocalExpense and LocalIncome interfaces using `local-{timestamp}-{random}` ID format
-- [ ] 1.2 Create `apps/webapp/src/lib/anonymous.ts` with `initializeAnonymousUser()`, `getAnonymousToken()`, and `clearAnonymousData()` functions
-- [ ] 1.3 Add POST /api/auth/anonymous endpoint in `apps/api/src/routes/auth.ts` to create anonymous user and return JWT token
+- [x] 1.1 Create `apps/webapp/src/lib/storage-types.ts` with LocalExpense and LocalIncome interfaces using `local-{timestamp}-{random}` ID format
+- [x] 1.2 Create `apps/webapp/src/lib/anonymous.ts` with `initializeAnonymousUser()`, `getAnonymousToken()`, and `clearAnonymousData()` functions
+- [x] 1.3 Add POST /api/auth/anonymous endpoint in `apps/api/src/routes/auth.ts` to create anonymous user and return JWT token
 - [ ] 1.4 Test anonymous user creation flow manually with curl/Postman
 
 ## Phase 2: Storage Abstraction for Expenses/Incomes
 
-- [ ] 2.1 Create `apps/webapp/src/lib/expense-service.ts` with LocalExpense CRUD operations using localStorage
-- [ ] 2.2 Create `apps/webapp/src/lib/income-service.ts` with LocalIncome CRUD operations using localStorage
-- [ ] 2.3 Implement mode detection: check for `anonymousId` in localStorage to determine local vs API mode
+- [x] 2.1 Create `apps/webapp/src/lib/expense-service.ts` with LocalExpense CRUD operations using localStorage
+- [x] 2.2 Create `apps/webapp/src/lib/income-service.ts` with LocalIncome CRUD operations using localStorage
+- [x] 2.3 Implement mode detection: check for `anonymousId` in localStorage to determine local vs API mode
 - [ ] 2.4 Write unit tests for localStorage adapter functions (mock localStorage)
 - [ ] 2.5 Write unit tests for expense/income service routing logic
 
 ## Phase 3: Core Implementation - Dashboard and Login Integration
 
-- [ ] 3.1 Remove Welcome Card from `apps/webapp/src/routes/index.tsx` (lines 1558-1601)
+- [x] 3.1 Remove Welcome Card from `apps/webapp/src/routes/index.tsx` (lines 1558-1601)
 - [ ] 3.2 Add local mode detection on app load in `apps/webapp/src/routes/index.tsx`
 - [ ] 3.3 Wire up expenses/incomes display to use localStorage in local mode
-- [ ] 3.4 Modify `packages/core/src/auth-claim/application/use-cases.ts` to accept expenses/incomes array in claim for migration
-- [ ] 3.5 Update `packages/db/src/core.ts` `claimAnonymousData` function to accept and migrate expense/income data
+- [x] 3.4 Modify `packages/core/src/auth-claim/application/use-cases.ts` to accept expenses/incomes array in claim for migration
+- [x] 3.5 Update `packages/db/src/core.ts` `claimAnonymousData` function to accept and migrate expense/income data
 - [ ] 3.6 Modify `apps/webapp/src/routes/add.tsx` to support local mode for expense/income creation
 
 ## Phase 4: Share Button Auth Check
