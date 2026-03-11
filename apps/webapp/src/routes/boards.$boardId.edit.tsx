@@ -166,7 +166,13 @@ function EditBoard() {
       return updateBoardSettings(accessToken, boardId, payload);
     },
     onSuccess: async () => {
-      if (accessToken && !isLocalMode()) {
+      if (isLocalMode()) {
+        // In local mode, trigger a reload to refresh from localStorage
+        navigate({ to: '/' as never, search: { _rel: Date.now() } });
+        return;
+      }
+
+      if (accessToken) {
         await queryClient.invalidateQueries({
           queryKey: dashboardQueryKey(accessToken),
         });
