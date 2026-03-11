@@ -18,14 +18,24 @@ export interface LocalBoard {
  */
 export function getLocalBoard(): LocalBoard {
   if (typeof window === 'undefined') {
-    return { id: 'local-default', name: 'Mi Tablero', isOwner: true };
+    return {
+      id: 'local-default',
+      name: 'Mi Tablero',
+      isOwner: true,
+      spendingLimitAmount: null,
+    };
   }
   const stored = localStorage.getItem('localBoard');
   if (stored) {
     try {
       return JSON.parse(stored);
     } catch {
-      return { id: 'local-default', name: 'Mi Tablero', isOwner: true };
+      return {
+        id: 'local-default',
+        name: 'Mi Tablero',
+        isOwner: true,
+        spendingLimitAmount: null,
+      };
     }
   }
   // Return default local board
@@ -37,6 +47,14 @@ export function getLocalBoard(): LocalBoard {
   };
   localStorage.setItem('localBoard', JSON.stringify(defaultBoard));
   return defaultBoard;
+}
+
+/**
+ * Save the local board to localStorage
+ */
+export function saveLocalBoard(board: LocalBoard): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('localBoard', JSON.stringify(board));
 }
 
 export interface LocalExpense {
@@ -95,12 +113,4 @@ export function generateLocalId(): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 9);
   return `local-${timestamp}-${random}`;
-}
-
-/**
- * Save the local board to localStorage
- */
-export function saveLocalBoard(board: LocalBoard): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('localBoard', JSON.stringify(board));
 }

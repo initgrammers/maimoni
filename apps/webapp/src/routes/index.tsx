@@ -609,22 +609,31 @@ function Dashboard() {
   ]);
 
   const dashboardQuery = useQuery<DashboardResponse, Error>({
-    queryKey: accessToken
-      ? ([...dashboardQueryKey(accessToken), selectedBoardId] as const)
-      : (['dashboard', 'guest'] as const),
-    queryFn: () => {
+    queryKey: isLocalMode()
+      ? (['dashboard', 'local'] as const)
+      : accessToken
+        ? ([...dashboardQueryKey(accessToken), selectedBoardId] as const)
+        : (['dashboard', 'guest'] as const),
+    queryFn: (): Promise<DashboardResponse> => {
       // In local mode, we don't need to fetch from API - use local data only
       if (isLocalMode()) {
         // Get the local board from localStorage
         const localBoard = getLocalBoard();
         // Return data with local board and expenses/incomes
-        return {
-          board: localBoard,
-          boards: [localBoard],
-          expenses: getLocalExpenses(),
-          incomes: [],
+        return Promise.resolve({
+          board: localBoard as DashboardResponse['board'],
+          boards: [
+            {
+              ...localBoard,
+              role: 'owner' as const,
+              spendingLimitAmount: localBoard.spendingLimitAmount,
+            },
+          ],
+          expenses: getLocalExpenses() as DashboardResponse['expenses'],
+          incomes: getLocalIncomes() as DashboardResponse['incomes'],
           categories: [],
-        };
+          role: 'owner' as const,
+        });
       }
 
       if (!accessToken) {

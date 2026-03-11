@@ -167,8 +167,8 @@ function EditBoard() {
     },
     onSuccess: async () => {
       if (isLocalMode()) {
-        // In local mode, trigger a reload to refresh from localStorage
-        navigate({ to: '/' as never, search: { _rel: Date.now() } });
+        // Force reload to get fresh data from localStorage
+        window.location.href = '/';
         return;
       }
 
