@@ -35,8 +35,9 @@ export function getAnonymousToken(): string | null {
 export function isLocalMode(): boolean {
   if (typeof window === 'undefined') return false;
   const anonymousId = getAnonymousId();
-  const accessToken = localStorage.getItem('accessToken');
-  return !!anonymousId && !accessToken;
+  // Solo necesita anonymousId para modo local
+  // El token puede existir pero expenses/incomes van a localStorage
+  return !!anonymousId;
 }
 
 /**
