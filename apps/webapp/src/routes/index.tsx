@@ -29,7 +29,10 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '../components/ui/drawer';
+import { getLocalExpenses } from '../lib/expense-service';
+import { getLocalIncomes } from '../lib/income-service';
 import { getApiBase, startAuth } from '../lib/openauth';
+
 import {
   getDashboardPeriod,
   getStatsMonth,
