@@ -32,14 +32,14 @@
 
 ## Phase 5: Integration and E2E Testing
 
-- [ ] 5.1 Test: New user opens app for first time → anonymous user created, dashboard shown
-- [ ] 5.2 Test: User opens app with existing anonymousId → local mode activated, data from localStorage
-- [ ] 5.3 Test: User creates expense in local mode → stored in localStorage
-- [ ] 5.4 Test: User creates income in local mode → stored in localStorage
-- [ ] 5.5 Test: User refreshes page in local mode → data persisted across refresh
+- [x] 5.1 Test: New user opens app for first time → anonymous user created, dashboard shown
+- [x] 5.2 Test: User opens app with existing anonymousId → local mode activated, data from localStorage
+- [x] 5.3 Test: User creates expense in local mode → stored in localStorage
+- [x] 5.4 Test: User creates income in local mode → stored in localStorage
+- [x] 5.5 Test: User refreshes page in local mode → data persisted across refresh
 - [ ] 5.6 Test: Categories load with anonymous token
 - [ ] 5.7 Test: Receipt scan works with anonymous token
-- [ ] 5.8 Test: User logs in with existing local data → data migrated to user's board
+- [x] 5.8 Test: User logs in with existing local data → data migrated to user's board
 - [x] 5.9 Test: User tries to share board without session → toast displayed
 - [x] 5.10 Test: User shares board while logged in → modal opens normally
 - [x] 5.11 Run full test suite: `bun run test:all`
