@@ -665,7 +665,7 @@ function Dashboard() {
 
       return fetchBoardInvitations(accessToken, data.board.id);
     },
-    enabled: Boolean(accessToken && data?.board.id),
+    enabled: !isLocalMode() && Boolean(accessToken && data?.board.id),
   });
 
   const pendingInvitations = useMemo(
@@ -699,7 +699,11 @@ function Dashboard() {
     }
   >({
     mutationFn: ({ boardId, targetRole, ttlHours, phoneNumber }) => {
-      if (!accessToken && !isLocalMode()) {
+      if (isLocalMode()) {
+        throw new Error('Debes iniciar sesión para usar esta funcionalidad');
+      }
+
+      if (!accessToken) {
         throw new Error('Sesión no disponible');
       }
 
@@ -726,7 +730,11 @@ function Dashboard() {
     { invitationId: string }
   >({
     mutationFn: ({ invitationId }) => {
-      if (!accessToken && !isLocalMode()) {
+      if (isLocalMode()) {
+        throw new Error('Debes iniciar sesión para usar esta funcionalidad');
+      }
+
+      if (!accessToken) {
         throw new Error('Sesión no disponible');
       }
 
@@ -768,7 +776,11 @@ function Dashboard() {
     { invitationId: string }
   >({
     mutationFn: ({ invitationId }) => {
-      if (!accessToken && !isLocalMode()) {
+      if (isLocalMode()) {
+        throw new Error('Debes iniciar sesión para usar esta funcionalidad');
+      }
+
+      if (!accessToken) {
         throw new Error('Sesión no disponible');
       }
 
