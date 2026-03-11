@@ -618,6 +618,7 @@ function Dashboard() {
         // Return empty data structure - local data is combined later
         return {
           board: { id: selectedBoardId, name: 'Modo Local', isOwner: true },
+          boards: [],
           expenses: [],
           incomes: [],
           categories: [],
