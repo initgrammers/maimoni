@@ -153,6 +153,7 @@ function EditBoard() {
         const updatedBoard: LocalBoard = {
           ...currentBoard,
           name: payload.name,
+          spendingLimitAmount: payload.spendingLimitAmount,
         };
         saveLocalBoard(updatedBoard);
         return;

@@ -2660,7 +2660,7 @@ function Dashboard() {
                     Seleccionar tablero
                   </button>
                 )}
-                {selectedBoardForDrawer.role === 'owner' && (
+                {(selectedBoardForDrawer.role === 'owner' || isLocalMode()) && (
                   <button
                     type="button"
                     onClick={() => {
