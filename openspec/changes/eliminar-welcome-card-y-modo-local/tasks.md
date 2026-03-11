@@ -12,8 +12,8 @@
 - [x] 2.1 Create `apps/webapp/src/lib/expense-service.ts` with LocalExpense CRUD operations using localStorage
 - [x] 2.2 Create `apps/webapp/src/lib/income-service.ts` with LocalIncome CRUD operations using localStorage
 - [x] 2.3 Implement mode detection: check for `anonymousId` in localStorage to determine local vs API mode
-- [ ] 2.4 Write unit tests for localStorage adapter functions (mock localStorage)
-- [ ] 2.5 Write unit tests for expense/income service routing logic
+- [x] 2.4 Write unit tests for localStorage adapter functions (mock localStorage)
+- [x] 2.5 Write unit tests for expense/income service routing logic
 
 ## Phase 3: Core Implementation - Dashboard and Login Integration
 
@@ -42,8 +42,8 @@
 - [ ] 5.8 Test: User logs in with existing local data → data migrated to user's board
 - [x] 5.9 Test: User tries to share board without session → toast displayed
 - [x] 5.10 Test: User shares board while logged in → modal opens normally
-- [ ] 5.11 Run full test suite: `bun run test:all`
-- [ ] 5.12 Run lint/format check: `bun run check`
+- [x] 5.11 Run full test suite: `bun run test:all`
+- [x] 5.12 Run lint/format check: `bun run check`
 
 ## Phase 6: Cleanup and Documentation
 
