@@ -1,16 +1,12 @@
 /**
  * Anonymous user initialization and management
- * Handles creation of anonymous users and token storage
+ * Handles creation of anonymous users using the openauth library
  */
+
+import { startAuth } from './openauth';
 
 const ANONYMOUS_ID_KEY = 'anonymousId';
 const ANONYMOUS_TOKEN_KEY = 'anonymousToken';
-
-// Auth server URL from environment
-const AUTH_URL =
-  typeof window !== 'undefined'
-    ? import.meta.env.VITE_AUTH_URL || '/auth'
-    : '/auth';
 
 export interface AnonymousUser {
   anonymousId: string;
@@ -44,55 +40,20 @@ export function isLocalMode(): boolean {
 }
 
 /**
- * Store anonymous user credentials in localStorage
- */
-function storeAnonymousCredentials(anonymousId: string, token: string): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(ANONYMOUS_ID_KEY, anonymousId);
-  localStorage.setItem(ANONYMOUS_TOKEN_KEY, token);
-}
-
-/**
- * Create an anonymous user via auth server and obtain JWT token
- * Called when no accessToken exists and no anonymousId is found
+ * Create an anonymous user via auth server
+ * This triggers a redirect to the auth server for authentication
+ * The callback at /callback/auth will handle saving the token
  */
 export async function initializeAnonymousUser(): Promise<AnonymousUser | null> {
   try {
-    // Call the auth server to create anonymous user
-    // The auth server will create the user in DB and return a JWT token
-    const response = await fetch(`${AUTH_URL}/anonymous/authorize`, {
-      method: 'GET',
-      credentials: 'include', // Include cookies for session
-    });
+    // Use the existing openauth library to start anonymous auth
+    // This will redirect to AUTH_URL/auth/anonymous/authorize
+    // The callback at /callback/auth will save the token
+    await startAuth('anonymous');
 
-    if (!response.ok) {
-      console.error('Failed to create anonymous user:', response.statusText);
-      return null;
-    }
-
-    // The auth server should redirect or return the token
-    // For anonymous, we need to extract the user info from the response
-    // or from the session cookie
-
-    // If the response contains the token directly
-    const data = await response.json();
-
-    // Extract user ID from the token or response
-    const token = data.access_token || data.token;
-    const userId = data.user?.id || data.sub || data.userId;
-
-    if (!token || !userId) {
-      console.error('No token or userId returned from auth server');
-      return null;
-    }
-
-    // Store credentials
-    storeAnonymousCredentials(userId, token);
-
-    return {
-      anonymousId: userId,
-      token,
-    };
+    // This function doesn't return because it redirects
+    // The callback will handle the token saving
+    return null;
   } catch (error) {
     console.error('Error initializing anonymous user:', error);
     return null;
