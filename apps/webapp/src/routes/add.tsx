@@ -26,6 +26,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '../components/ui/drawer';
+import { isLocalMode } from '../lib/anonymous';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, Subcategory } from '../types';
@@ -59,6 +60,10 @@ const categoriesQueryKey = (accessToken: string) =>
 
 export const Route = createFileRoute('/add' as never)({
   beforeLoad: () => {
+    // Allow access in local mode without authentication
+    if (isLocalMode()) {
+      return;
+    }
     requireClientAuth();
   },
   component: AddRouteComponent,

@@ -3,13 +3,13 @@
  * Handles CRUD operations for incomes in local mode
  */
 
+import { getAnonymousId, isLocalMode } from './anonymous';
 import type {
-  LocalIncome,
   CreateIncomeInput,
+  LocalIncome,
   UpdateIncomeInput,
 } from './storage-types';
 import { generateLocalId } from './storage-types';
-import { isLocalMode, getAnonymousId } from './anonymous';
 
 const INCOMES_KEY = 'incomes';
 
@@ -18,10 +18,10 @@ const INCOMES_KEY = 'incomes';
  */
 export function getLocalIncomes(): LocalIncome[] {
   if (typeof window === 'undefined') return [];
-  
+
   const data = localStorage.getItem(INCOMES_KEY);
   if (!data) return [];
-  
+
   try {
     return JSON.parse(data) as LocalIncome[];
   } catch {
@@ -42,7 +42,7 @@ function saveLocalIncomes(incomes: LocalIncome[]): void {
  */
 export function createLocalIncome(input: CreateIncomeInput): LocalIncome {
   const incomes = getLocalIncomes();
-  
+
   const newIncome: LocalIncome = {
     id: generateLocalId(),
     amount: input.amount,
@@ -52,10 +52,10 @@ export function createLocalIncome(input: CreateIncomeInput): LocalIncome {
     categoryName: input.categoryName,
     categoryEmoji: input.categoryEmoji,
   };
-  
+
   incomes.push(newIncome);
   saveLocalIncomes(incomes);
-  
+
   return newIncome;
 }
 
@@ -67,19 +67,19 @@ export function updateLocalIncome(
   input: UpdateIncomeInput,
 ): LocalIncome | null {
   const incomes = getLocalIncomes();
-  const index = incomes.findIndex(i => i.id === id);
-  
+  const index = incomes.findIndex((i) => i.id === id);
+
   if (index === -1) return null;
-  
+
   const updated: LocalIncome = {
     ...incomes[index],
     ...input,
     id: incomes[index].id, // Preserve original ID
   };
-  
+
   incomes[index] = updated;
   saveLocalIncomes(incomes);
-  
+
   return updated;
 }
 
@@ -88,10 +88,10 @@ export function updateLocalIncome(
  */
 export function deleteLocalIncome(id: string): boolean {
   const incomes = getLocalIncomes();
-  const filtered = incomes.filter(i => i.id !== id);
-  
+  const filtered = incomes.filter((i) => i.id !== id);
+
   if (filtered.length === incomes.length) return false;
-  
+
   saveLocalIncomes(filtered);
   return true;
 }
@@ -101,7 +101,7 @@ export function deleteLocalIncome(id: string): boolean {
  */
 export function getLocalIncome(id: string): LocalIncome | null {
   const incomes = getLocalIncomes();
-  return incomes.find(i => i.id === id) ?? null;
+  return incomes.find((i) => i.id === id) ?? null;
 }
 
 /**

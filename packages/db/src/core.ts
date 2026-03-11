@@ -1,13 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import {
-  boardMembers,
-  boards,
-  expenses,
-  incomes,
-  invitations,
-  users,
-} from './schema';
+import { boardMembers, boards, invitations, users } from './schema';
 
 type DatabaseInstance = NeonHttpDatabase<Record<string, never>>;
 
@@ -70,7 +63,17 @@ export async function getOrCreateInitialBoard(
 
 export async function claimAnonymousData(
   db: DbLike,
-  { realUserId, anonymousId, expenses, incomes }: { realUserId: string; anonymousId: string; expenses?: unknown[]; incomes?: unknown[] },
+  {
+    realUserId,
+    anonymousId,
+    expenses,
+    incomes,
+  }: {
+    realUserId: string;
+    anonymousId: string;
+    expenses?: unknown[];
+    incomes?: unknown[];
+  },
 ) {
   const runClaim = async (client: DbLike) => {
     const [anonUser] = await client

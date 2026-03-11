@@ -18,17 +18,17 @@
 ## Phase 3: Core Implementation - Dashboard and Login Integration
 
 - [x] 3.1 Remove Welcome Card from `apps/webapp/src/routes/index.tsx` (lines 1558-1601)
-- [ ] 3.2 Add local mode detection on app load in `apps/webapp/src/routes/index.tsx`
-- [ ] 3.3 Wire up expenses/incomes display to use localStorage in local mode
+- [x] 3.2 Add local mode detection on app load in `apps/webapp/src/routes/index.tsx`
+- [x] 3.3 Wire up expenses/incomes display to use localStorage in local mode
 - [x] 3.4 Modify `packages/core/src/auth-claim/application/use-cases.ts` to accept expenses/incomes array in claim for migration
 - [x] 3.5 Update `packages/db/src/core.ts` `claimAnonymousData` function to accept and migrate expense/income data
-- [ ] 3.6 Modify `apps/webapp/src/routes/add.tsx` to support local mode for expense/income creation
+- [x] 3.6 Modify `apps/webapp/src/routes/add.tsx` to support local mode for expense/income creation
 
 ## Phase 4: Share Button Auth Check
 
-- [ ] 4.1 Add auth check before showing share button UI in board drawer
-- [ ] 4.2 Display toast "Debes iniciar sesión para compartir el tablero" when user taps share without accessToken
-- [ ] 4.3 Ensure share modal opens normally when user is authenticated
+- [x] 4.1 Add auth check before showing share button UI in board drawer
+- [x] 4.2 Display toast "Debes iniciar sesión para compartir el tablero" when user taps share without accessToken
+- [x] 4.3 Ensure share modal opens normally when user is authenticated
 
 ## Phase 5: Integration and E2E Testing
 
@@ -40,8 +40,8 @@
 - [ ] 5.6 Test: Categories load with anonymous token
 - [ ] 5.7 Test: Receipt scan works with anonymous token
 - [ ] 5.8 Test: User logs in with existing local data → data migrated to user's board
-- [ ] 5.9 Test: User tries to share board without session → toast displayed
-- [ ] 5.10 Test: User shares board while logged in → modal opens normally
+- [x] 5.9 Test: User tries to share board without session → toast displayed
+- [x] 5.10 Test: User shares board while logged in → modal opens normally
 - [ ] 5.11 Run full test suite: `bun run test:all`
 - [ ] 5.12 Run lint/format check: `bun run check`
 

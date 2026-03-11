@@ -3,13 +3,13 @@
  * Handles CRUD operations for expenses in local mode
  */
 
+import { getAnonymousId, isLocalMode } from './anonymous';
 import type {
-  LocalExpense,
   CreateExpenseInput,
+  LocalExpense,
   UpdateExpenseInput,
 } from './storage-types';
 import { generateLocalId } from './storage-types';
-import { isLocalMode, getAnonymousId } from './anonymous';
 
 const EXPENSES_KEY = 'expenses';
 
@@ -18,10 +18,10 @@ const EXPENSES_KEY = 'expenses';
  */
 export function getLocalExpenses(): LocalExpense[] {
   if (typeof window === 'undefined') return [];
-  
+
   const data = localStorage.getItem(EXPENSES_KEY);
   if (!data) return [];
-  
+
   try {
     return JSON.parse(data) as LocalExpense[];
   } catch {
@@ -42,7 +42,7 @@ function saveLocalExpenses(expenses: LocalExpense[]): void {
  */
 export function createLocalExpense(input: CreateExpenseInput): LocalExpense {
   const expenses = getLocalExpenses();
-  
+
   const newExpense: LocalExpense = {
     id: generateLocalId(),
     amount: input.amount,
@@ -55,10 +55,10 @@ export function createLocalExpense(input: CreateExpenseInput): LocalExpense {
     subcategoryName: input.subcategoryName ?? null,
     subcategoryEmoji: input.subcategoryEmoji ?? null,
   };
-  
+
   expenses.push(newExpense);
   saveLocalExpenses(expenses);
-  
+
   return newExpense;
 }
 
@@ -70,19 +70,19 @@ export function updateLocalExpense(
   input: UpdateExpenseInput,
 ): LocalExpense | null {
   const expenses = getLocalExpenses();
-  const index = expenses.findIndex(e => e.id === id);
-  
+  const index = expenses.findIndex((e) => e.id === id);
+
   if (index === -1) return null;
-  
+
   const updated: LocalExpense = {
     ...expenses[index],
     ...input,
     id: expenses[index].id, // Preserve original ID
   };
-  
+
   expenses[index] = updated;
   saveLocalExpenses(expenses);
-  
+
   return updated;
 }
 
@@ -91,10 +91,10 @@ export function updateLocalExpense(
  */
 export function deleteLocalExpense(id: string): boolean {
   const expenses = getLocalExpenses();
-  const filtered = expenses.filter(e => e.id !== id);
-  
+  const filtered = expenses.filter((e) => e.id !== id);
+
   if (filtered.length === expenses.length) return false;
-  
+
   saveLocalExpenses(filtered);
   return true;
 }
@@ -104,7 +104,7 @@ export function deleteLocalExpense(id: string): boolean {
  */
 export function getLocalExpense(id: string): LocalExpense | null {
   const expenses = getLocalExpenses();
-  return expenses.find(e => e.id === id) ?? null;
+  return expenses.find((e) => e.id === id) ?? null;
 }
 
 /**

@@ -13,6 +13,12 @@ import {
   User,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  getAnonymousId,
+  getAnonymousToken,
+  initializeAnonymousUser,
+  isLocalMode,
+} from '@/lib/anonymous';
 import { StackedBarChart } from '../components/charts/StackedBarChart';
 import {
   Drawer,
@@ -24,9 +30,6 @@ import {
   DrawerTitle,
 } from '../components/ui/drawer';
 import { getApiBase, startAuth } from '../lib/openauth';
-import { getLocalExpenses, getLocalIncomes, createLocalExpense, deleteLocalExpense, isExpenseLocalMode } from '@/lib/expense-service';
-import { createLocalIncome, deleteLocalIncome, isIncomeLocalMode } from '@/lib/income-service';
-import { initializeAnonymousUser, getAnonymousId, getAnonymousToken, isLocalMode, getAuthToken, clearAnonymousData } from '@/lib/anonymous';
 import {
   getDashboardPeriod,
   getStatsMonth,
@@ -478,7 +481,7 @@ function Dashboard() {
     // Initialize anonymous user if in local mode
     const handleLocalMode = async () => {
       const anonId = getAnonymousId();
-      const token = getAnonymousToken();
+      const _token = getAnonymousToken();
 
       if (!anonId) {
         // No anonymous ID - create new anonymous user
@@ -620,7 +623,18 @@ function Dashboard() {
     refetchOnMount: 'always',
   });
 
-  const data = dashboardQuery.data ?? null;
+  // Use localStorage data when in local mode
+  const localExpenses = isLocalMode() ? getLocalExpenses() : [];
+  const localIncomes = isLocalMode() ? getLocalIncomes() : [];
+
+  // Combine API data with local data when in local mode
+  const data = dashboardQuery.data
+    ? {
+        ...dashboardQuery.data,
+        expenses: isLocalMode() ? localExpenses : dashboardQuery.data.expenses,
+        incomes: isLocalMode() ? localIncomes : dashboardQuery.data.incomes,
+      }
+    : null;
 
   const invitationsQuery = useQuery<BoardInvitation[], Error>({
     queryKey:
@@ -1295,7 +1309,7 @@ function Dashboard() {
     };
   }, [monthlyExpenseTotal, monthlyLimit]);
 
-  async function continueAsAnonymous() {
+  async function _continueAsAnonymous() {
     setError(null);
     setLoading(true);
     try {

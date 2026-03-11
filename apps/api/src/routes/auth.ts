@@ -1,3 +1,4 @@
+import { getOrCreateInitialBoard, syncUser } from '@maimoni/db';
 import { Hono } from 'hono';
 import type { UserContext } from '../middleware';
 import {
@@ -6,7 +7,6 @@ import {
   createCoreDeps,
   createCoreUseCases,
 } from './types';
-import { syncUser, getOrCreateInitialBoard } from '@maimoni/db';
 
 export function createAuthRouter({ db }: ApiDeps) {
   const router = new Hono<UserContext>();

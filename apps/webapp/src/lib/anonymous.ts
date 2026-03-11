@@ -67,7 +67,7 @@ export async function initializeAnonymousUser(): Promise<AnonymousUser | null> {
     }
 
     const data = await response.json();
-    
+
     if (!data.anonymousId) {
       console.error('No anonymousId returned from server');
       return null;
@@ -75,7 +75,7 @@ export async function initializeAnonymousUser(): Promise<AnonymousUser | null> {
 
     // Create a JWT token for the anonymous user
     const token = createToken(data.anonymousId);
-    
+
     // Store credentials
     storeAnonymousCredentials(data.anonymousId, token);
 
@@ -108,13 +108,13 @@ export function clearAnonymousData(): void {
  */
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
-  
+
   // First check for authenticated token
   const accessToken = localStorage.getItem('accessToken');
   if (accessToken) {
     return accessToken;
   }
-  
+
   // Fall back to anonymous token in local mode
   return getAnonymousToken();
 }
