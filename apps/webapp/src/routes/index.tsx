@@ -32,7 +32,6 @@ import {
 import { getLocalExpenses } from '../lib/expense-service';
 import { getLocalIncomes } from '../lib/income-service';
 import { getApiBase, startAuth } from '../lib/openauth';
-
 import {
   getDashboardPeriod,
   getStatsMonth,
@@ -41,6 +40,7 @@ import {
   setStatsPeriod as saveStatsPeriodToStorage,
   setDashboardPeriod,
 } from '../lib/storage';
+import { getLocalBoard } from '../lib/storage-types';
 
 dayjs.locale('es');
 
@@ -615,11 +615,13 @@ function Dashboard() {
     queryFn: () => {
       // In local mode, we don't need to fetch from API - use local data only
       if (isLocalMode()) {
-        // Return empty data structure - local data is combined later
+        // Get the local board from localStorage
+        const localBoard = getLocalBoard();
+        // Return data with local board and expenses/incomes
         return {
-          board: { id: selectedBoardId, name: 'Modo Local', isOwner: true },
-          boards: [],
-          expenses: [],
+          board: localBoard,
+          boards: [localBoard],
+          expenses: getLocalExpenses(),
           incomes: [],
           categories: [],
         };
