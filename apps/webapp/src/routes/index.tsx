@@ -767,7 +767,8 @@ function Dashboard() {
 
       return fetchBoardInvitations(accessToken, selectedBoardForDrawer.id);
     },
-    enabled: Boolean(accessToken && selectedBoardForDrawer?.id),
+    enabled:
+      !isLocalMode() && Boolean(accessToken && selectedBoardForDrawer?.id),
   });
 
   const _boardDrawerRevokeMutation = useMutation<

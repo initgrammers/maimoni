@@ -10,6 +10,7 @@ export interface LocalBoard {
   id: string;
   name: string;
   isOwner: boolean;
+  spendingLimitAmount: string | null;
 }
 
 /**
@@ -32,6 +33,7 @@ export function getLocalBoard(): LocalBoard {
     id: 'local-default',
     name: 'Mi Tablero',
     isOwner: true,
+    spendingLimitAmount: null,
   };
   localStorage.setItem('localBoard', JSON.stringify(defaultBoard));
   return defaultBoard;

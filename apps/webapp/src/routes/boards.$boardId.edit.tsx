@@ -116,7 +116,7 @@ function EditBoard() {
         return {
           id: localBoard.id,
           name: localBoard.name,
-          spendingLimitAmount: null,
+          spendingLimitAmount: localBoard.spendingLimitAmount,
         };
       }
 
