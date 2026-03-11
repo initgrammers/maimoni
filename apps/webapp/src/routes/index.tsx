@@ -2114,7 +2114,7 @@ function Dashboard() {
                 activeBoardId={data.board.id}
                 onBoardTap={openBoardDetails}
               />
-              {data.role !== 'viewer' && (
+              {!isLocalMode() && data.role !== 'viewer' && (
                 <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <div>
                     <p className="text-base font-semibold text-slate-900">
