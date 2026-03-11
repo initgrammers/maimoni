@@ -96,3 +96,11 @@ export function generateLocalId(): string {
   const random = Math.random().toString(36).substring(2, 9);
   return `local-${timestamp}-${random}`;
 }
+
+/**
+ * Save the local board to localStorage
+ */
+export function saveLocalBoard(board: LocalBoard): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('localBoard', JSON.stringify(board));
+}
