@@ -3,10 +3,14 @@
  * Handles creation of anonymous users and token storage
  */
 
-import { createToken } from './auth';
-
 const ANONYMOUS_ID_KEY = 'anonymousId';
 const ANONYMOUS_TOKEN_KEY = 'anonymousToken';
+
+// Auth server URL from environment
+const AUTH_URL =
+  typeof window !== 'undefined'
+    ? import.meta.env.VITE_AUTH_URL || '/auth'
+    : '/auth';
 
 export interface AnonymousUser {
   anonymousId: string;
@@ -49,16 +53,16 @@ function storeAnonymousCredentials(anonymousId: string, token: string): void {
 }
 
 /**
- * Create an anonymous user and obtain JWT token
+ * Create an anonymous user via auth server and obtain JWT token
  * Called when no accessToken exists and no anonymousId is found
  */
 export async function initializeAnonymousUser(): Promise<AnonymousUser | null> {
   try {
-    const response = await fetch('/api/auth/anonymous', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    // Call the auth server to create anonymous user
+    // The auth server will create the user in DB and return a JWT token
+    const response = await fetch(`${AUTH_URL}/anonymous/authorize`, {
+      method: 'GET',
+      credentials: 'include', // Include cookies for session
     });
 
     if (!response.ok) {
@@ -66,21 +70,27 @@ export async function initializeAnonymousUser(): Promise<AnonymousUser | null> {
       return null;
     }
 
+    // The auth server should redirect or return the token
+    // For anonymous, we need to extract the user info from the response
+    // or from the session cookie
+
+    // If the response contains the token directly
     const data = await response.json();
 
-    if (!data.anonymousId) {
-      console.error('No anonymousId returned from server');
+    // Extract user ID from the token or response
+    const token = data.access_token || data.token;
+    const userId = data.user?.id || data.sub || data.userId;
+
+    if (!token || !userId) {
+      console.error('No token or userId returned from auth server');
       return null;
     }
 
-    // Create a JWT token for the anonymous user
-    const token = createToken(data.anonymousId);
-
     // Store credentials
-    storeAnonymousCredentials(data.anonymousId, token);
+    storeAnonymousCredentials(userId, token);
 
     return {
-      anonymousId: data.anonymousId,
+      anonymousId: userId,
       token,
     };
   } catch (error) {

@@ -40,9 +40,9 @@ export function createAuthMiddleware(
     // Skip auth for public routes
     const path = c.req.path;
     const publicPaths = [
-      '/api/auth/anonymous',
       '/api/auth/login',
       '/api/auth/verify',
+      '/api/auth/callback/anonymous',
     ];
     if (publicPaths.includes(path)) {
       await next();
