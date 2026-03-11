@@ -2,8 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Loader2, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
+import { isLocalMode } from '../lib/anonymous';
 import { getApiBase } from '../lib/openauth';
-import { requireClientAuth } from '../lib/route-guards';
+import {
+  getLocalBoard,
+  type LocalBoard,
+  saveLocalBoard,
+} from '../lib/storage-types';
 
 type BoardDetail = {
   id: string;
@@ -19,6 +24,12 @@ const boardQueryKey = (accessToken: string, boardId: string) =>
 
 export const Route = createFileRoute('/boards/$boardId/edit' as never)({
   beforeLoad: () => {
+    // Allow access in local mode
+    if (isLocalMode()) {
+      return;
+    }
+    // For non-local mode, require auth
+    const { requireClientAuth } = require('../lib/route-guards');
     requireClientAuth();
   },
   component: EditBoard,
@@ -86,22 +97,36 @@ function EditBoard() {
   const [spendingLimit, setSpendingLimit] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Check if we're in local mode
+  const [localMode, setLocalMode] = useState(false);
+
   useEffect(() => {
     setAccessToken(window.localStorage.getItem('accessToken'));
+    setLocalMode(isLocalMode());
   }, []);
 
   const boardQuery = useQuery<BoardDetail, Error>({
     queryKey: accessToken
       ? boardQueryKey(accessToken, boardId)
-      : (['board', 'guest', boardId] as const),
+      : (['board', 'local', boardId] as const),
     queryFn: () => {
+      // In local mode, get board from localStorage
+      if (localMode || isLocalMode()) {
+        const localBoard = getLocalBoard();
+        return {
+          id: localBoard.id,
+          name: localBoard.name,
+          spendingLimitAmount: null,
+        };
+      }
+
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
 
       return fetchBoard(accessToken, boardId);
     },
-    enabled: Boolean(accessToken),
+    enabled: true,
   });
 
   useEffect(() => {
@@ -122,6 +147,17 @@ function EditBoard() {
     }
   >({
     mutationFn: async (payload) => {
+      // In local mode, save to localStorage
+      if (isLocalMode()) {
+        const currentBoard = getLocalBoard();
+        const updatedBoard: LocalBoard = {
+          ...currentBoard,
+          name: payload.name,
+        };
+        saveLocalBoard(updatedBoard);
+        return;
+      }
+
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
@@ -129,7 +165,7 @@ function EditBoard() {
       return updateBoardSettings(accessToken, boardId, payload);
     },
     onSuccess: async () => {
-      if (accessToken) {
+      if (accessToken && !isLocalMode()) {
         await queryClient.invalidateQueries({
           queryKey: dashboardQueryKey(accessToken),
         });
