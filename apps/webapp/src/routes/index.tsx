@@ -610,14 +610,25 @@ function Dashboard() {
       ? ([...dashboardQueryKey(accessToken), selectedBoardId] as const)
       : (['dashboard', 'guest'] as const),
     queryFn: () => {
-      if (!accessToken && !isLocalMode()) {
+      // In local mode, we don't need to fetch from API - use local data only
+      if (isLocalMode()) {
+        // Return empty data structure - local data is combined later
+        return {
+          board: { id: selectedBoardId, name: 'Modo Local', isOwner: true },
+          expenses: [],
+          incomes: [],
+          categories: [],
+        };
+      }
+
+      if (!accessToken) {
         throw new Error('Falta el token de acceso');
       }
       return fetchDashboard(accessToken, selectedBoardId);
     },
     enabled:
       isHydrated &&
-      Boolean(accessToken) &&
+      (Boolean(accessToken) || isLocalMode()) &&
       !pendingClaimAnonymousId &&
       !claimMutation.isPending,
     refetchOnMount: 'always',

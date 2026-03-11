@@ -27,6 +27,7 @@ import {
   DrawerTrigger,
 } from '../components/ui/drawer';
 import { isLocalMode } from '../lib/anonymous';
+import { createLocalExpense } from '../lib/expense-service';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, Subcategory } from '../types';
@@ -227,6 +228,22 @@ function AddExpenseForm() {
     }
   >({
     mutationFn: async ({ amount, categoryId, note, date }) => {
+      // Check if we're in local mode - save to localStorage instead of API
+      if (isLocalMode()) {
+        createLocalExpense({
+          amount,
+          date,
+          note: note ?? null,
+          categoryId: selectedSubcategory?.id || selectedCategory.id,
+          categoryName: selectedCategory.name,
+          categoryEmoji: selectedCategory.emoji,
+          subcategoryId: selectedSubcategory?.id ?? null,
+          subcategoryName: selectedSubcategory?.name ?? null,
+          subcategoryEmoji: selectedSubcategory?.emoji ?? null,
+        });
+        return;
+      }
+
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
@@ -262,14 +279,10 @@ function AddExpenseForm() {
       }
     },
     onSuccess: async () => {
-      if (accessToken) {
-        await queryClient.invalidateQueries({
-          queryKey: dashboardQueryKey(
-            accessToken,
-            window.localStorage.getItem('activeBoardId'),
-          ),
-        });
-      }
+      // Invalidate queries for both API and local mode
+      await queryClient.invalidateQueries({
+        queryKey: ['dashboard'],
+      });
 
       navigate({
         to: '/' as never,
