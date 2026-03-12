@@ -29,8 +29,8 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '../components/ui/drawer';
-import { getLocalExpenses } from '../lib/expense-service';
-import { getLocalIncomes } from '../lib/income-service';
+import { deleteLocalExpense, getLocalExpenses } from '../lib/expense-service';
+import { deleteLocalIncome, getLocalIncomes } from '../lib/income-service';
 import { getApiBase, startAuth } from '../lib/openauth';
 import {
   getDashboardPeriod,
@@ -910,19 +910,20 @@ function Dashboard() {
   const deleteExpenseMutation = useMutation<void, Error, { expenseId: string }>(
     {
       mutationFn: ({ expenseId }) => {
-        if (!accessToken && !isLocalMode()) {
+        if (isLocalMode()) {
+          deleteLocalExpense(expenseId);
+          return Promise.resolve();
+        }
+
+        if (!accessToken) {
           throw new Error('Sesión no disponible');
         }
 
         return removeExpense(accessToken, expenseId);
       },
       onSuccess: async () => {
-        if (!accessToken && !isLocalMode()) {
-          return;
-        }
-
         await queryClient.invalidateQueries({
-          queryKey: dashboardQueryKey(accessToken),
+          queryKey: ['dashboard'],
         });
       },
     },
@@ -930,19 +931,20 @@ function Dashboard() {
 
   const deleteIncomeMutation = useMutation<void, Error, { incomeId: string }>({
     mutationFn: ({ incomeId }) => {
-      if (!accessToken && !isLocalMode()) {
+      if (isLocalMode()) {
+        deleteLocalIncome(incomeId);
+        return Promise.resolve();
+      }
+
+      if (!accessToken) {
         throw new Error('Sesión no disponible');
       }
 
       return removeIncome(accessToken, incomeId);
     },
     onSuccess: async () => {
-      if (!accessToken && !isLocalMode()) {
-        return;
-      }
-
       await queryClient.invalidateQueries({
-        queryKey: dashboardQueryKey(accessToken),
+        queryKey: ['dashboard'],
       });
     },
   });
