@@ -642,25 +642,38 @@ function Dashboard() {
   });
 
   // Get local data - use pending data from callback if available, otherwise use current local data
-  const pendingExpensesStr = window.localStorage.getItem(
-    'pendingLocalExpenses',
-  );
-  const pendingIncomesStr = window.localStorage.getItem('pendingLocalIncomes');
-  const pendingBoardStr = window.localStorage.getItem('pendingLocalBoard');
+  // Only access localStorage after hydration to avoid SSR errors
+  const pendingExpensesStr = isHydrated
+    ? window.localStorage.getItem('pendingLocalExpenses')
+    : null;
+  const pendingIncomesStr = isHydrated
+    ? window.localStorage.getItem('pendingLocalIncomes')
+    : null;
+  const pendingBoardStr = isHydrated
+    ? window.localStorage.getItem('pendingLocalBoard')
+    : null;
 
-  const localExpenses = pendingExpensesStr
-    ? JSON.parse(pendingExpensesStr)
-    : isLocalMode()
-      ? getLocalExpenses()
-      : [];
-  const localIncomes = pendingIncomesStr
-    ? JSON.parse(pendingIncomesStr)
-    : isLocalMode()
-      ? getLocalIncomes()
-      : [];
+  const localExpenses = useMemo(
+    () =>
+      pendingExpensesStr
+        ? JSON.parse(pendingExpensesStr)
+        : isLocalMode()
+          ? getLocalExpenses()
+          : [],
+    [pendingExpensesStr, isHydrated],
+  );
+  const localIncomes = useMemo(
+    () =>
+      pendingIncomesStr
+        ? JSON.parse(pendingIncomesStr)
+        : isLocalMode()
+          ? getLocalIncomes()
+          : [],
+    [pendingIncomesStr, isHydrated],
+  );
 
   // Get local board data for migration
-  const getLocalBoardData = () => {
+  const localBoardData = useMemo(() => {
     if (pendingBoardStr) {
       return JSON.parse(pendingBoardStr);
     }
@@ -668,8 +681,7 @@ function Dashboard() {
       return getLocalBoard();
     }
     return null;
-  };
-  const localBoardData = getLocalBoardData();
+  }, [pendingBoardStr, isHydrated]);
 
   useEffect(() => {
     if (!accessToken || !pendingClaimAnonymousId) {
@@ -743,14 +755,8 @@ function Dashboard() {
     refetchOnMount: 'always',
   });
 
-  // Combine API data with local data when in local mode
-  const data = dashboardQuery.data
-    ? {
-        ...dashboardQuery.data,
-        expenses: isLocalMode() ? localExpenses : dashboardQuery.data.expenses,
-        incomes: isLocalMode() ? localIncomes : dashboardQuery.data.incomes,
-      }
-    : null;
+  // Use dashboard data directly - in local mode the query already returns local data
+  const data = dashboardQuery.data;
 
   const invitationsQuery = useQuery<BoardInvitation[], Error>({
     queryKey:
