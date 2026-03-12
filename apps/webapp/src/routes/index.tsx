@@ -688,6 +688,43 @@ function Dashboard() {
       return;
     }
 
+    // Check if there's actual local data to migrate
+    // Get raw localStorage to check if there's real data
+    const localExpensesStr = window.localStorage.getItem('expenses');
+    const localIncomesStr = window.localStorage.getItem('incomes');
+    const localBoardStr = window.localStorage.getItem('localBoard');
+
+    const hasLocalExpenses = localExpensesStr && localExpensesStr !== '[]';
+    const hasLocalIncomes = localIncomesStr && localIncomesStr !== '[]';
+
+    // Check if local board is different from default
+    let hasCustomBoard = false;
+    if (localBoardStr && localBoardStr !== '{}') {
+      try {
+        const board = JSON.parse(localBoardStr);
+        // Only count as custom if name or spendingLimit is different from defaults
+        if (board.name !== 'Mi Tablero' || board.spendingLimitAmount !== null) {
+          hasCustomBoard = true;
+        }
+      } catch {
+        // Invalid JSON, ignore
+      }
+    }
+
+    const hasLocalData = hasLocalExpenses || hasLocalIncomes || hasCustomBoard;
+
+    if (!hasLocalData) {
+      // Clear the pending claim data without calling the API
+      window.localStorage.removeItem('pendingClaimAnonymousId');
+      window.localStorage.removeItem('anonymousId');
+      setAnonymousId(null);
+      setPendingClaimAnonymousId(null);
+      return;
+    }
+
+    // Don't send boardId for local boards - only boardName and spendingLimit
+    const isLocalBoard = localBoardData?.id?.startsWith('local-');
+
     const nextRequestKey = `${accessToken}:${pendingClaimAnonymousId}`;
     if (claimMutation.isPending || claimRequestKey === nextRequestKey) {
       return;
@@ -699,7 +736,7 @@ function Dashboard() {
       anonymous: pendingClaimAnonymousId,
       expenses: localExpenses,
       incomes: localIncomes,
-      boardId: localBoardData?.id,
+      boardId: isLocalBoard ? undefined : localBoardData?.id,
       boardName: localBoardData?.name,
       spendingLimitAmount: localBoardData?.spendingLimitAmount ?? null,
     });
@@ -745,7 +782,11 @@ function Dashboard() {
       if (!accessToken) {
         throw new Error('Falta el token de acceso');
       }
-      return fetchDashboard(accessToken, selectedBoardId);
+      // Don't fetch with local board IDs - wait for claim to complete
+      const safeBoardId = selectedBoardId?.startsWith('local-')
+        ? undefined
+        : selectedBoardId;
+      return fetchDashboard(accessToken, safeBoardId);
     },
     enabled:
       isHydrated &&
@@ -1488,6 +1529,13 @@ function Dashboard() {
     window.localStorage.removeItem('auth_challenge');
     window.localStorage.removeItem('activeBoardId');
     window.localStorage.removeItem('localBoard');
+    // Clear local expenses and incomes
+    window.localStorage.removeItem('expenses');
+    window.localStorage.removeItem('incomes');
+    // Clear pending local data from previous claim attempts
+    window.localStorage.removeItem('pendingLocalExpenses');
+    window.localStorage.removeItem('pendingLocalIncomes');
+    window.localStorage.removeItem('pendingLocalBoard');
     setAccessToken(null);
     setAnonymousId(null);
     setPendingClaimAnonymousId(null);

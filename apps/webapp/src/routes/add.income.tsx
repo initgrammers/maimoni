@@ -352,7 +352,8 @@ function AddIncome() {
     e.preventDefault();
     if (!amount || !selectedCategory) return;
 
-    if (!accessToken) {
+    // In local mode, we don't need accessToken
+    if (!accessToken && !isLocalMode()) {
       setError('No hay sesión activa');
       return;
     }

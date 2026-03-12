@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import { boards, users } from './schema';
+import { boards, categories, expenses, incomes, users } from './schema';
 
 // Use the actual database client type
 type DbClient = NeonHttpDatabase<Record<string, never>>;
@@ -125,6 +125,21 @@ export async function claimAnonymousData(
 
     console.log('[claimAnonymousData] anonBoard:', anonBoard);
 
+    const hasExpenses = _expenses && _expenses.length > 0;
+    const hasIncomes = _incomes && _incomes.length > 0;
+    const hasMovements = hasExpenses || hasIncomes;
+
+    // If no movements to migrate, don't migrate the board either
+    // The user will use their existing boards
+    if (!hasMovements) {
+      console.log(
+        '[claimAnonymousData] No movements to migrate, skipping board migration',
+      );
+      // Still delete anonymous user but don't create/migrate board
+      await client.delete(users).where(eq(users.id, anonymousId));
+      return { success: true, boardMigrated: false };
+    }
+
     let _targetBoardId: string;
 
     // Migrate board if exists, or create new one
@@ -162,17 +177,90 @@ export async function claimAnonymousData(
       _targetBoardId = newBoard.id;
     }
 
-    // Note: Local expenses/incomes require category IDs from the database
-    // They are stored locally with categoryName/categoryEmoji but the DB requires categoryId
-    // For now, we only migrate the board data. Users can re-add expenses if needed.
+    // Migrate local expenses/incomes with category matching
+    // Try to find or create categories based on local categoryName/categoryEmoji
+    const migrateMovements = async (
+      client: typeof db,
+      movements: unknown[],
+      boardId: string,
+      userId: string,
+      movementType: 'expense' | 'income',
+      table: typeof expenses | typeof incomes,
+    ) => {
+      const tableToUse = movementType === 'expense' ? expenses : incomes;
+
+      for (const movement of movements as Array<{
+        id: string;
+        amount: string;
+        date: string;
+        note: string | null;
+        categoryName: string;
+        categoryEmoji: string;
+        subcategoryName: string | null;
+        subcategoryEmoji: string | null;
+      }>) {
+        // Try to find category by name
+        let [existingCategory] = await client
+          .select()
+          .from(categories)
+          .where(eq(categories.name, movement.categoryName))
+          .limit(1);
+
+        // If not found, create it
+        if (!existingCategory) {
+          [existingCategory] = await client
+            .insert(categories)
+            .values({
+              name: movement.categoryName,
+              emoji: movement.categoryEmoji,
+              type: movementType === 'expense' ? 'expense' : 'income',
+            })
+            .returning();
+        }
+
+        await client.insert(tableToUse).values({
+          id: crypto.randomUUID(),
+          boardId,
+          userId,
+          amount: movement.amount,
+          categoryId: existingCategory.id,
+          note: movement.note,
+          date: new Date(movement.date),
+        });
+      }
+    };
+
+    // Migrate expenses
     if (_expenses?.length) {
       console.log(
-        '[claimAnonymousData] Skipping local expenses migration - requires category setup',
+        '[claimAnonymousData] Migrating',
+        _expenses.length,
+        'expenses...',
+      );
+      await migrateMovements(
+        client,
+        _expenses,
+        _targetBoardId,
+        realUserId,
+        'expense',
+        expenses,
       );
     }
+
+    // Migrate incomes
     if (_incomes?.length) {
       console.log(
-        '[claimAnonymousData] Skipping local incomes migration - requires category setup',
+        '[claimAnonymousData] Migrating',
+        _incomes.length,
+        'incomes...',
+      );
+      await migrateMovements(
+        client,
+        _incomes,
+        _targetBoardId,
+        realUserId,
+        'income',
+        incomes,
       );
     }
 
