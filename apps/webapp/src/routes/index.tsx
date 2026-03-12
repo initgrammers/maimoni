@@ -660,7 +660,7 @@ function Dashboard() {
         : isLocalMode()
           ? getLocalExpenses()
           : [],
-    [pendingExpensesStr, isHydrated],
+    [pendingExpensesStr],
   );
   const localIncomes = useMemo(
     () =>
@@ -669,7 +669,7 @@ function Dashboard() {
         : isLocalMode()
           ? getLocalIncomes()
           : [],
-    [pendingIncomesStr, isHydrated],
+    [pendingIncomesStr],
   );
 
   // Get local board data for migration
@@ -681,7 +681,7 @@ function Dashboard() {
       return getLocalBoard();
     }
     return null;
-  }, [pendingBoardStr, isHydrated]);
+  }, [pendingBoardStr]);
 
   useEffect(() => {
     if (!accessToken || !pendingClaimAnonymousId) {

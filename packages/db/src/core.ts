@@ -1,4 +1,4 @@
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
 import { boards, categories, expenses, incomes, users } from './schema';
 
@@ -185,7 +185,7 @@ export async function claimAnonymousData(
       boardId: string,
       userId: string,
       movementType: 'expense' | 'income',
-      table: typeof expenses | typeof incomes,
+      _table: typeof expenses | typeof incomes,
     ) => {
       const tableToUse = movementType === 'expense' ? expenses : incomes;
 

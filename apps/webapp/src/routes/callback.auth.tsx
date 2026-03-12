@@ -15,19 +15,14 @@ function AuthCallback() {
 
   const callbackMutation = useMutation({
     mutationFn: async () => {
-      // DEBUG: Check local data before anything
+      // Save anonymousId BEFORE processing the callback
+      const previousAnonymousId = window.localStorage.getItem('anonymousId');
+
+      // Save local expenses/incomes/board before they're lost
       const expensesBefore = getLocalExpenses();
       const incomesBefore = getLocalIncomes();
       const boardBefore = getLocalBoard();
-      console.log('[callback] Local expenses BEFORE:', expensesBefore);
-      console.log('[callback] Local incomes BEFORE:', incomesBefore);
-      console.log('[callback] Local board BEFORE:', boardBefore);
 
-      // Save anonymousId BEFORE processing the callback
-      const previousAnonymousId = window.localStorage.getItem('anonymousId');
-      console.log('[callback] previousAnonymousId:', previousAnonymousId);
-
-      // Save local expenses/incomes/board before they're lost
       if (
         expensesBefore.length > 0 ||
         incomesBefore.length > 0 ||
@@ -45,13 +40,6 @@ function AuthCallback() {
           'pendingLocalBoard',
           JSON.stringify(boardBefore),
         );
-        console.log('[callback] Saved pending data:', {
-          expenses: expensesBefore.length,
-          incomes: incomesBefore.length,
-          board: boardBefore.name,
-        });
-      } else {
-        console.log('[callback] No local data to save');
       }
 
       await finishAuthFromCallback(new URLSearchParams(window.location.search));
@@ -59,28 +47,11 @@ function AuthCallback() {
       return previousAnonymousId;
     },
     onSuccess: (previousAnonymousId) => {
-      console.log(
-        '[callback] onSuccess, previousAnonymousId:',
-        previousAnonymousId,
-      );
-      console.log(
-        '[callback] pendingLocalExpenses:',
-        window.localStorage.getItem('pendingLocalExpenses'),
-      );
-      console.log(
-        '[callback] pendingLocalIncomes:',
-        window.localStorage.getItem('pendingLocalIncomes'),
-      );
-
       // If there was an anonymous user before login, set pendingClaimAnonymousId
       // to trigger data migration after login
       if (previousAnonymousId) {
         window.localStorage.setItem(
           'pendingClaimAnonymousId',
-          previousAnonymousId,
-        );
-        console.log(
-          '[callback] Set pendingClaimAnonymousId:',
           previousAnonymousId,
         );
       }
