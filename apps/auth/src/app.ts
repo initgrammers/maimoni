@@ -42,6 +42,11 @@ export const app = issuer({
     if (value.provider === 'anonymous') {
       const userId = crypto.randomUUID();
       await syncUser(db, { id: userId, phoneNumber: null });
+
+      // Create a default board for the anonymous user
+      const { getOrCreateInitialBoard } = await import('@maimoni/db');
+      await getOrCreateInitialBoard(db, { userId });
+
       return ctx.subject(
         'user',
         {

@@ -4,5 +4,8 @@ export type AuthClaimRepository = {
     anonymousId: string;
     expenses?: unknown[];
     incomes?: unknown[];
+    boardId?: string;
+    boardName?: string;
+    spendingLimitAmount?: string | null;
   }): Promise<void>;
 };

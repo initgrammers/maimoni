@@ -4,6 +4,7 @@ import { Loader2, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { isLocalMode } from '../lib/anonymous';
 import { getApiBase } from '../lib/openauth';
+import { requireClientAuth } from '../lib/route-guards';
 import {
   getLocalBoard,
   type LocalBoard,
@@ -29,7 +30,6 @@ export const Route = createFileRoute('/boards/$boardId/edit' as never)({
       return;
     }
     // For non-local mode, require auth
-    const { requireClientAuth } = require('../lib/route-guards');
     requireClientAuth();
   },
   component: EditBoard,

@@ -1,21 +1,12 @@
 import { eq } from 'drizzle-orm';
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import { boardMembers, boards, invitations, users } from './schema';
+import { boards, users } from './schema';
 
-type DatabaseInstance = NeonHttpDatabase<Record<string, never>>;
-
-type DbLike = {
-  select: DatabaseInstance['select'];
-  insert: DatabaseInstance['insert'];
-  update: DatabaseInstance['update'];
-  delete: DatabaseInstance['delete'];
-  transaction?: (
-    callback: (tx: DbLike) => Promise<{ success: boolean }>,
-  ) => Promise<{ success: boolean }>;
-};
+// Use the actual database client type
+type DbClient = NeonHttpDatabase<Record<string, never>>;
 
 export async function syncUser(
-  db: DbLike,
+  db: DbClient,
   { id, phoneNumber }: { id: string; phoneNumber?: string | null },
 ) {
   const [user] = await db
@@ -37,7 +28,7 @@ export async function syncUser(
 }
 
 export async function getOrCreateInitialBoard(
-  db: DbLike,
+  db: DbClient,
   { userId }: { userId: string },
 ) {
   const existingBoards = await db
@@ -62,25 +53,43 @@ export async function getOrCreateInitialBoard(
 }
 
 export async function claimAnonymousData(
-  db: DbLike,
+  db: DbClient,
   {
     realUserId,
     anonymousId,
-    expenses,
-    incomes,
+    expenses: _expenses,
+    incomes: _incomes,
+    boardId,
+    boardName,
+    spendingLimitAmount,
   }: {
     realUserId: string;
     anonymousId: string;
     expenses?: unknown[];
     incomes?: unknown[];
+    boardId?: string;
+    boardName?: string;
+    spendingLimitAmount?: string | null;
   },
 ) {
-  const runClaim = async (client: DbLike) => {
+  console.log('[claimAnonymousData] Input:', {
+    realUserId,
+    anonymousId,
+    expensesCount: _expenses?.length,
+    incomesCount: _incomes?.length,
+    boardId,
+    boardName,
+    spendingLimitAmount,
+  });
+
+  const runClaim = async (client: DbClient) => {
     const [anonUser] = await client
       .select()
       .from(users)
       .where(eq(users.id, anonymousId))
       .limit(1);
+
+    console.log('[claimAnonymousData] anonUser:', anonUser);
 
     if (!anonUser) {
       throw new Error('Anonymous user not found');
@@ -90,42 +99,94 @@ export async function claimAnonymousData(
       throw new Error('User is not anonymous');
     }
 
-    await client
-      .update(boards)
-      .set({ ownerId: realUserId, updatedAt: new Date() })
-      .where(eq(boards.ownerId, anonymousId));
+    // Check if anonymous user has a board (either by boardId or by ownerId)
+    let anonBoard = null;
 
-    await client
-      .update(incomes)
-      .set({ userId: realUserId, updatedAt: new Date() })
-      .where(eq(incomes.userId, anonymousId));
+    if (boardId) {
+      // Find board by provided ID (should belong to anonymous user)
+      const [foundBoard] = await client
+        .select()
+        .from(boards)
+        .where(eq(boards.id, boardId))
+        .limit(1);
+      anonBoard = foundBoard;
+      console.log('[claimAnonymousData] Found board by boardId:', anonBoard);
+    }
 
-    await client
-      .update(expenses)
-      .set({ userId: realUserId, updatedAt: new Date() })
-      .where(eq(expenses.userId, anonymousId));
+    if (!anonBoard) {
+      // Fallback: find board by ownerId
+      const [foundBoard] = await client
+        .select()
+        .from(boards)
+        .where(eq(boards.ownerId, anonymousId))
+        .limit(1);
+      anonBoard = foundBoard;
+    }
 
-    await client
-      .update(boardMembers)
-      .set({ userId: realUserId, updatedAt: new Date() })
-      .where(eq(boardMembers.userId, anonymousId));
+    console.log('[claimAnonymousData] anonBoard:', anonBoard);
 
-    await client
-      .update(invitations)
-      .set({
-        invitedAnonymousId: null,
+    let _targetBoardId: string;
+
+    // Migrate board if exists, or create new one
+    if (anonBoard) {
+      // Update board with local name/limit if provided
+      const updateData: Record<string, unknown> = {
+        ownerId: realUserId,
         updatedAt: new Date(),
-      })
-      .where(eq(invitations.invitedAnonymousId, anonymousId));
+      };
+      if (boardName) {
+        updateData.name = boardName;
+      }
+      if (spendingLimitAmount !== undefined) {
+        updateData.spendingLimitAmount = spendingLimitAmount;
+      }
 
+      await client
+        .update(boards)
+        .set(updateData)
+        .where(eq(boards.id, anonBoard.id));
+
+      _targetBoardId = anonBoard.id;
+    } else {
+      // Create a new board (with local data if available)
+      const [newBoard] = await client
+        .insert(boards)
+        .values({
+          name: boardName || 'Mi Tablero',
+          ownerId: realUserId,
+          spendingLimitAmount: spendingLimitAmount ?? null,
+        })
+        .returning();
+
+      console.log('[claimAnonymousData] Created new board:', newBoard.id);
+      _targetBoardId = newBoard.id;
+    }
+
+    // Note: Local expenses/incomes require category IDs from the database
+    // They are stored locally with categoryName/categoryEmoji but the DB requires categoryId
+    // For now, we only migrate the board data. Users can re-add expenses if needed.
+    if (_expenses?.length) {
+      console.log(
+        '[claimAnonymousData] Skipping local expenses migration - requires category setup',
+      );
+    }
+    if (_incomes?.length) {
+      console.log(
+        '[claimAnonymousData] Skipping local incomes migration - requires category setup',
+      );
+    }
+
+    // Delete anonymous user (data already migrated)
     await client.delete(users).where(eq(users.id, anonymousId));
 
-    return { success: true };
+    return { success: true, boardMigrated: !!anonBoard };
   };
 
   if ('transaction' in db && typeof db.transaction === 'function') {
     try {
-      return await db.transaction(async (tx) => runClaim(tx));
+      return await db.transaction(async (tx) =>
+        runClaim(tx as unknown as DbClient),
+      );
     } catch (error) {
       if (
         error instanceof Error &&

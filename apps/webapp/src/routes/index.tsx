@@ -183,14 +183,29 @@ async function fetchDashboard(accessToken: string, boardId?: string | null) {
   return (await response.json()) as DashboardResponse;
 }
 
-async function claimAnonymousBoard(accessToken: string, anonymousId: string) {
+async function claimAnonymousBoard(
+  accessToken: string,
+  anonymousId: string,
+  localExpenses: unknown[] = [],
+  localIncomes: unknown[] = [],
+  localBoardId?: string,
+  localBoardName?: string,
+  localSpendingLimit?: string | null,
+) {
   const response = await fetch(`${API_BASE}/api/auth/claim`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ anonymousId }),
+    body: JSON.stringify({
+      anonymousId,
+      expenses: localExpenses,
+      incomes: localIncomes,
+      boardId: localBoardId,
+      boardName: localBoardName,
+      spendingLimitAmount: localSpendingLimit,
+    }),
   });
 
   if (!response.ok) {
@@ -474,15 +489,22 @@ function Dashboard() {
   const [_shareError, _setShareError] = useState<string | null>(null);
   const [_shareSuccess, _setShareSuccess] = useState<string | null>(null);
   useEffect(() => {
-    setAccessToken(window.localStorage.getItem('accessToken'));
+    const token = window.localStorage.getItem('accessToken');
+    setAccessToken(token);
     setAnonymousId(window.localStorage.getItem('anonymousId'));
     setSelectedBoardId(window.localStorage.getItem('activeBoardId'));
     setPendingClaimAnonymousId(
       window.localStorage.getItem('pendingClaimAnonymousId'),
     );
     setIsHydrated(true);
-    // Initialize anonymous user if in local mode
+
+    // Only initialize anonymous user if NOT logged in
     const handleLocalMode = async () => {
+      // If user is logged in, don't create anonymous user
+      if (token) {
+        return;
+      }
+
       const anonId = getAnonymousId();
       const _token = getAnonymousToken();
 
@@ -561,15 +583,49 @@ function Dashboard() {
   const claimMutation = useMutation<
     void,
     Error,
-    { token: string; anonymous: string }
+    {
+      token: string;
+      anonymous: string;
+      expenses: unknown[];
+      incomes: unknown[];
+      boardId?: string;
+      boardName?: string;
+      spendingLimitAmount?: string | null;
+    }
   >({
-    mutationFn: ({ token, anonymous }) => claimAnonymousBoard(token, anonymous),
+    mutationFn: ({
+      token,
+      anonymous,
+      expenses,
+      incomes,
+      boardId,
+      boardName,
+      spendingLimitAmount,
+    }) =>
+      claimAnonymousBoard(
+        token,
+        anonymous,
+        expenses,
+        incomes,
+        boardId,
+        boardName,
+        spendingLimitAmount,
+      ),
     onSuccess: async (_data, variables) => {
       window.localStorage.removeItem('pendingClaimAnonymousId');
       window.localStorage.removeItem('anonymousId');
+      window.localStorage.removeItem('activeBoardId'); // Clear local board ID
+      window.localStorage.removeItem('localBoard'); // Clear local board data
+      window.localStorage.removeItem('pendingLocalExpenses'); // Clear pending expenses
+      window.localStorage.removeItem('pendingLocalIncomes'); // Clear pending incomes
+      window.localStorage.removeItem('pendingLocalBoard'); // Clear pending board
       setAnonymousId(null);
       setPendingClaimAnonymousId(null);
       setClaimRequestKey(null);
+      setSelectedBoardId(null); // Force re-fetch of real boards
+
+      // Invalidate all dashboard-related queries to refresh boards
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       await queryClient.invalidateQueries({
         queryKey: dashboardQueryKey(variables.token),
       });
@@ -585,6 +641,36 @@ function Dashboard() {
     },
   });
 
+  // Get local data - use pending data from callback if available, otherwise use current local data
+  const pendingExpensesStr = window.localStorage.getItem(
+    'pendingLocalExpenses',
+  );
+  const pendingIncomesStr = window.localStorage.getItem('pendingLocalIncomes');
+  const pendingBoardStr = window.localStorage.getItem('pendingLocalBoard');
+
+  const localExpenses = pendingExpensesStr
+    ? JSON.parse(pendingExpensesStr)
+    : isLocalMode()
+      ? getLocalExpenses()
+      : [];
+  const localIncomes = pendingIncomesStr
+    ? JSON.parse(pendingIncomesStr)
+    : isLocalMode()
+      ? getLocalIncomes()
+      : [];
+
+  // Get local board data for migration
+  const getLocalBoardData = () => {
+    if (pendingBoardStr) {
+      return JSON.parse(pendingBoardStr);
+    }
+    if (isLocalMode()) {
+      return getLocalBoard();
+    }
+    return null;
+  };
+  const localBoardData = getLocalBoardData();
+
   useEffect(() => {
     if (!accessToken || !pendingClaimAnonymousId) {
       return;
@@ -599,6 +685,11 @@ function Dashboard() {
     claimMutation.mutate({
       token: accessToken,
       anonymous: pendingClaimAnonymousId,
+      expenses: localExpenses,
+      incomes: localIncomes,
+      boardId: localBoardData?.id,
+      boardName: localBoardData?.name,
+      spendingLimitAmount: localBoardData?.spendingLimitAmount ?? null,
     });
   }, [
     accessToken,
@@ -606,6 +697,9 @@ function Dashboard() {
     claimMutation.isPending,
     claimRequestKey,
     pendingClaimAnonymousId,
+    localExpenses,
+    localIncomes,
+    localBoardData,
   ]);
 
   const dashboardQuery = useQuery<DashboardResponse, Error>({
@@ -648,10 +742,6 @@ function Dashboard() {
       !claimMutation.isPending,
     refetchOnMount: 'always',
   });
-
-  // Use localStorage data when in local mode
-  const localExpenses = isLocalMode() ? getLocalExpenses() : [];
-  const localIncomes = isLocalMode() ? getLocalIncomes() : [];
 
   // Combine API data with local data when in local mode
   const data = dashboardQuery.data
@@ -1388,12 +1478,26 @@ function Dashboard() {
     window.localStorage.removeItem('anonymousId');
     window.localStorage.removeItem('pendingClaimAnonymousId');
     window.localStorage.removeItem('auth_challenge');
+    window.localStorage.removeItem('activeBoardId');
+    window.localStorage.removeItem('localBoard');
     setAccessToken(null);
     setAnonymousId(null);
     setPendingClaimAnonymousId(null);
     setClaimRequestKey(null);
+    setSelectedBoardId(null);
     setError(null);
     setView('dashboard');
+
+    // Clear all queries to prevent stale data
+    queryClient.clear();
+
+    // Create new anonymous user after logout
+    initializeAnonymousUser().then((result) => {
+      if (result) {
+        setAnonymousId(result.anonymousId);
+        window.localStorage.setItem('anonymousId', result.anonymousId);
+      }
+    });
   }
 
   async function createInvitationLink() {

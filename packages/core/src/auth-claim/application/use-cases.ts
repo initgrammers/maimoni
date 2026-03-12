@@ -6,6 +6,9 @@ export type ClaimAnonymousDataInput = {
   anonymousId: string;
   expenses?: unknown[];
   incomes?: unknown[];
+  boardId?: string;
+  boardName?: string;
+  spendingLimitAmount?: string | null;
 };
 
 export type ClaimAnonymousDataResult =
@@ -35,6 +38,9 @@ export function createClaimAnonymousData(deps: {
         anonymousId: input.anonymousId,
         expenses: input.expenses,
         incomes: input.incomes,
+        boardId: input.boardId,
+        boardName: input.boardName,
+        spendingLimitAmount: input.spendingLimitAmount,
       });
 
       return { status: 'claimed' };

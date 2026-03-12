@@ -9,6 +9,11 @@ export function createAuthClaimRepository(db: DbClient): AuthClaimRepository {
       await claimAnonymousData(db, {
         realUserId: input.realUserId,
         anonymousId: input.anonymousId,
+        expenses: input.expenses,
+        incomes: input.incomes,
+        boardId: input.boardId,
+        boardName: input.boardName,
+        spendingLimitAmount: input.spendingLimitAmount,
       });
     },
   };

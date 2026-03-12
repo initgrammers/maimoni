@@ -38,7 +38,7 @@ function normalizePhoneNumber(input: string) {
   return `+593${local}`;
 }
 
-async function sendWhatsAppCode(phoneNumber: string, code: string) {
+async function _sendWhatsAppCode(phoneNumber: string, code: string) {
   const whatsappNumber = getEnv('TWILIO_WHATSAPP_NUMBER');
 
   const twilioClient = getTwilioClient();
@@ -51,7 +51,7 @@ async function sendWhatsAppCode(phoneNumber: string, code: string) {
   });
 }
 
-async function sendSMSCode(phoneNumber: string, code: string) {
+async function _sendSMSCode(phoneNumber: string, code: string) {
   const messagingServiceSid = getEnv('TWILIO_MESSAGING_SERVICE_SID');
 
   const twilioClient = getTwilioClient();
@@ -64,7 +64,7 @@ async function sendSMSCode(phoneNumber: string, code: string) {
   });
 }
 
-async function sendBetaModeMessage(phoneNumber: string, code: string) {
+async function _sendBetaModeMessage(phoneNumber: string, code: string) {
   console.log(
     '╔══════════════════════════════════════════════════════════════╗',
   );
@@ -126,14 +126,15 @@ export const WhatsAppCodeProvider = CodeProvider(
       if (!phoneNumber) throw new Error('Phone number is required');
 
       console.log('Sending code via', AUTH_CHANNEL, 'to', phoneNumber);
+      console.log('Code:', code);
 
-      if (AUTH_CHANNEL === 'whatsapp') {
-        await sendWhatsAppCode(phoneNumber, code);
-      } else if (AUTH_CHANNEL === 'sms') {
-        await sendSMSCode(phoneNumber, code);
-      } else {
-        await sendBetaModeMessage(phoneNumber, code);
-      }
+      // if (AUTH_CHANNEL === 'whatsapp') {
+      //   await sendWhatsAppCode(phoneNumber, code);
+      // } else if (AUTH_CHANNEL === 'sms') {
+      //   await sendSMSCode(phoneNumber, code);
+      // } else {
+      //   await sendBetaModeMessage(phoneNumber, code);
+      // }
     },
   }),
 );
