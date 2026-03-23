@@ -697,13 +697,10 @@ function Dashboard() {
   }, [pendingBoardStr]);
 
   useEffect(() => {
-    // Only attempt claim if there's an accessToken AND pendingClaimAnonymousId AND the URL has a code parameter
-    // The code parameter indicates the OAuth flow was completed successfully
-    // Without it, the user clicked "Iniciar sesión" but went back without completing login
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasAuthCode = urlParams.has('code');
-
-    if (!accessToken || !pendingClaimAnonymousId || !hasAuthCode) {
+    // Only attempt claim if there's an accessToken AND pendingClaimAnonymousId
+    // The presence of both indicates the OAuth flow completed successfully
+    // (the callback auth page sets pendingClaimAnonymousId before redirecting here)
+    if (!accessToken || !pendingClaimAnonymousId) {
       return;
     }
 

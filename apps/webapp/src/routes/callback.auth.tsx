@@ -47,11 +47,9 @@ function AuthCallback() {
       return previousAnonymousId;
     },
     onSuccess: (_previousAnonymousId) => {
-      // OAuth completed successfully - clear pending claim state
-      // The pendingClaimAnonymousId was set to track the login attempt,
-      // but now that login succeeded, we don't need it anymore
-      // (data migration happens via pendingLocalExpenses/pendingLocalIncomes)
-      window.localStorage.removeItem('pendingClaimAnonymousId');
+      // OAuth completed successfully - DON'T remove pendingClaimAnonymousId here
+      // The index.tsx page needs it to trigger the claim migration flow
+      // Just clear the auth challenge
       window.localStorage.removeItem('auth_challenge');
 
       const pendingInviteToken =
