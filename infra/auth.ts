@@ -25,6 +25,7 @@ export const auth = new sst.aws.Auth.v1('auth', {
         'TWILIO_AUTH_TOKEN',
         'TWILIO_MESSAGING_SERVICE_SID',
         'TWILIO_WHATSAPP_NUMBER',
+        'TWILIO_WHATSAPP_TEMPLATE_SID',
       ]),
       AUTH_STORAGE: $dev
         ? `{"type":"memory","options":{"persist": "../../../apps/auth/persist.json"}}`

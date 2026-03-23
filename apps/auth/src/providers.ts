@@ -7,7 +7,7 @@ import { CustomCodeUI } from './custom-code-ui';
 // 'whatsapp' = Envio por WhatsApp (produccion)
 // 'sms' = Envio por SMS (fallback/testing)
 // 'beta' = Modo beta - muestra mensaje de contacto a Henry
-export const AUTH_CHANNEL = 'sms' as 'whatsapp' | 'sms' | 'beta';
+export const AUTH_CHANNEL = 'whatsapp' as 'whatsapp' | 'sms' | 'beta';
 
 function getTwilioClient() {
   const accountSid = getEnv('TWILIO_ACCOUNT_SID');
@@ -20,7 +20,7 @@ function getTwilioClient() {
   return twilio(accountSid, authToken);
 }
 
-function normalizePhoneNumber(input: string) {
+export function normalizePhoneNumber(input: string) {
   const normalized = input.trim();
   // Already has country code
   if (normalized.startsWith('+')) {
@@ -38,14 +38,16 @@ function normalizePhoneNumber(input: string) {
   return `+593${local}`;
 }
 
-async function _sendWhatsAppCode(phoneNumber: string, code: string) {
+export async function _sendWhatsAppCode(phoneNumber: string, code: string) {
   const whatsappNumber = getEnv('TWILIO_WHATSAPP_NUMBER');
+  const templateSid = getEnv('TWILIO_WHATSAPP_TEMPLATE_SID');
 
   const twilioClient = getTwilioClient();
   const ecuadorPhoneNumber = normalizePhoneNumber(phoneNumber);
 
   await twilioClient.messages.create({
-    body: `Tu codigo de verificacion para Maimonei es: ${code}`,
+    contentSid: templateSid,
+    contentVariables: JSON.stringify({ '1': code }),
     from: `whatsapp:${whatsappNumber}`,
     to: `whatsapp:${ecuadorPhoneNumber}`,
   });
@@ -128,13 +130,13 @@ export const WhatsAppCodeProvider = CodeProvider(
       console.log('Sending code via', AUTH_CHANNEL, 'to', phoneNumber);
       console.log('Code:', code);
 
-      // if (AUTH_CHANNEL === 'whatsapp') {
-      //   await sendWhatsAppCode(phoneNumber, code);
-      // } else if (AUTH_CHANNEL === 'sms') {
-      //   await sendSMSCode(phoneNumber, code);
-      // } else {
-      //   await sendBetaModeMessage(phoneNumber, code);
-      // }
+      if (AUTH_CHANNEL === 'whatsapp') {
+        await _sendWhatsAppCode(phoneNumber, code);
+      } else if (AUTH_CHANNEL === 'sms') {
+        await _sendSMSCode(phoneNumber, code);
+      } else {
+        await _sendBetaModeMessage(phoneNumber, code);
+      }
     },
   }),
 );
