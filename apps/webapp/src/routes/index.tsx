@@ -15,7 +15,6 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   getAnonymousId,
-  getAnonymousToken,
   initializeAnonymousUser,
   isLocalMode,
 } from '@/lib/anonymous';
@@ -490,12 +489,27 @@ function Dashboard() {
   const [_shareSuccess, _setShareSuccess] = useState<string | null>(null);
   useEffect(() => {
     const token = window.localStorage.getItem('accessToken');
+    const pendingClaimId = window.localStorage.getItem(
+      'pendingClaimAnonymousId',
+    );
+    const authChallenge = window.localStorage.getItem('auth_challenge');
+
+    // Detect incomplete OAuth flow (user started login but cancelled)
+    // If pendingClaimAnonymousId AND auth_challenge are set, it means OAuth
+    // started but didn't complete (user went back/cancelled or closed the tab)
+    // Clean it up regardless of whether there's an accessToken or not
+    if (pendingClaimId && authChallenge) {
+      // Clean up incomplete OAuth state - allow app to continue
+      window.localStorage.removeItem('pendingClaimAnonymousId');
+      window.localStorage.removeItem('auth_challenge');
+      setPendingClaimAnonymousId(null);
+    } else {
+      setPendingClaimAnonymousId(pendingClaimId);
+    }
+
     setAccessToken(token);
     setAnonymousId(window.localStorage.getItem('anonymousId'));
     setSelectedBoardId(window.localStorage.getItem('activeBoardId'));
-    setPendingClaimAnonymousId(
-      window.localStorage.getItem('pendingClaimAnonymousId'),
-    );
     setIsHydrated(true);
 
     // Only initialize anonymous user if NOT logged in
@@ -506,7 +520,6 @@ function Dashboard() {
       }
 
       const anonId = getAnonymousId();
-      const _token = getAnonymousToken();
 
       if (!anonId) {
         // No anonymous ID - create new anonymous user
@@ -684,7 +697,13 @@ function Dashboard() {
   }, [pendingBoardStr]);
 
   useEffect(() => {
-    if (!accessToken || !pendingClaimAnonymousId) {
+    // Only attempt claim if there's an accessToken AND pendingClaimAnonymousId AND the URL has a code parameter
+    // The code parameter indicates the OAuth flow was completed successfully
+    // Without it, the user clicked "Iniciar sesión" but went back without completing login
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasAuthCode = urlParams.has('code');
+
+    if (!accessToken || !pendingClaimAnonymousId || !hasAuthCode) {
       return;
     }
 
@@ -713,11 +732,12 @@ function Dashboard() {
 
     const hasLocalData = hasLocalExpenses || hasLocalIncomes || hasCustomBoard;
 
+    // Only attempt claim if there's actual local data to migrate
+    // Otherwise, just clear the pending claim flags without removing anonymousId
+    // This allows the user to click "Iniciar sesión" and go back without losing their anonymous session
     if (!hasLocalData) {
-      // Clear the pending claim data without calling the API
+      // Clear only the pending claim data, keep anonymousId for local mode
       window.localStorage.removeItem('pendingClaimAnonymousId');
-      window.localStorage.removeItem('anonymousId');
-      setAnonymousId(null);
       setPendingClaimAnonymousId(null);
       return;
     }
@@ -996,7 +1016,7 @@ function Dashboard() {
         throw new Error('Sesión no disponible');
       }
 
-      return removeBoard(accessToken, boardId);
+      return removeBoard(accessToken ?? '', boardId);
     },
     onSuccess: async (_, { boardId }) => {
       const activeBoardId = window.localStorage.getItem('activeBoardId');
@@ -1012,7 +1032,7 @@ function Dashboard() {
       }
 
       await queryClient.invalidateQueries({
-        queryKey: dashboardQueryKey(accessToken),
+        queryKey: dashboardQueryKey(accessToken ?? ''),
       });
     },
   });
@@ -1486,19 +1506,6 @@ function Dashboard() {
       mood,
     };
   }, [monthlyExpenseTotal, monthlyLimit]);
-
-  async function _continueAsAnonymous() {
-    setError(null);
-    setLoading(true);
-    try {
-      await startAuth('anonymous');
-    } catch (e) {
-      console.error('Error al iniciar sesión anónima:', e);
-      setError('No se pudo iniciar sesión anónima');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function loginAndClaim() {
     setError(null);

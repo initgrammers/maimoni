@@ -46,15 +46,13 @@ function AuthCallback() {
 
       return previousAnonymousId;
     },
-    onSuccess: (previousAnonymousId) => {
-      // If there was an anonymous user before login, set pendingClaimAnonymousId
-      // to trigger data migration after login
-      if (previousAnonymousId) {
-        window.localStorage.setItem(
-          'pendingClaimAnonymousId',
-          previousAnonymousId,
-        );
-      }
+    onSuccess: (_previousAnonymousId) => {
+      // OAuth completed successfully - clear pending claim state
+      // The pendingClaimAnonymousId was set to track the login attempt,
+      // but now that login succeeded, we don't need it anymore
+      // (data migration happens via pendingLocalExpenses/pendingLocalIncomes)
+      window.localStorage.removeItem('pendingClaimAnonymousId');
+      window.localStorage.removeItem('auth_challenge');
 
       const pendingInviteToken =
         window.localStorage.getItem('pendingInviteToken');
