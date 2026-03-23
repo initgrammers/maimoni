@@ -37,6 +37,18 @@ export function createAuthMiddleware(
     const logger = c.get('wide-logger');
     const token = getBearerToken(c.req.header('authorization'));
 
+    // Skip auth for public routes
+    const path = c.req.path;
+    const publicPaths = [
+      '/api/auth/login',
+      '/api/auth/verify',
+      '/api/auth/callback/anonymous',
+    ];
+    if (publicPaths.includes(path)) {
+      await next();
+      return;
+    }
+
     if (!token) {
       logger.addError(new Error('Authentication failed'), {
         auth_failed: true,

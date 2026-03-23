@@ -20,6 +20,8 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '../components/ui/drawer';
+import { isLocalMode } from '../lib/anonymous';
+import { createLocalIncome } from '../lib/income-service';
 import { getApiBase } from '../lib/openauth';
 import { requireClientAuth } from '../lib/route-guards';
 import type { Category, MovementType, Subcategory } from '../types';
@@ -215,6 +217,19 @@ function AddIncome() {
     }
   >({
     mutationFn: async ({ amount, categoryId, note, date }) => {
+      // Check if we're in local mode - save to localStorage instead of API
+      if (isLocalMode()) {
+        createLocalIncome({
+          amount,
+          date,
+          note: note ?? null,
+          categoryId: selectedSubcategory?.id || selectedCategory.id,
+          categoryName: selectedCategory.name,
+          categoryEmoji: selectedCategory.emoji,
+        });
+        return;
+      }
+
       if (!accessToken) {
         throw new Error('No hay sesión activa');
       }
@@ -250,14 +265,10 @@ function AddIncome() {
       }
     },
     onSuccess: async () => {
-      if (accessToken) {
-        await queryClient.invalidateQueries({
-          queryKey: dashboardQueryKey(
-            accessToken,
-            window.localStorage.getItem('activeBoardId'),
-          ),
-        });
-      }
+      // Invalidate queries for both API and local mode
+      await queryClient.invalidateQueries({
+        queryKey: ['dashboard'],
+      });
 
       navigate({
         to: '/' as never,
@@ -341,7 +352,8 @@ function AddIncome() {
     e.preventDefault();
     if (!amount || !selectedCategory) return;
 
-    if (!accessToken) {
+    // In local mode, we don't need accessToken
+    if (!accessToken && !isLocalMode()) {
       setError('No hay sesión activa');
       return;
     }

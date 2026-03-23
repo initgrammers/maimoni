@@ -125,29 +125,75 @@ function updateButtonState() {
 
 document.addEventListener('DOMContentLoaded', function() {
   const countrySelect = document.querySelector('.country-select');
-  const phoneInput = document.querySelector('input[name="phone"]');
+  // Only select visible phone input (type="tel"), not hidden inputs
+  const phoneInput = document.querySelector('input[type="tel"][name="phone"]');
   const form = document.querySelector('form');
   
-  if (countrySelect) countrySelect.addEventListener('change', updateButtonState);
-  if (phoneInput) {
-    phoneInput.addEventListener('input', updateButtonState);
-    updateButtonState();
+  // Only run on start page (when there's a visible phone input)
+  if (!phoneInput || !form || !countrySelect) return;
+  
+  function restorePhoneValue() {
+    // Check sessionStorage first for the original value (set during submit)
+    const storedValue = sessionStorage.getItem('phoneInputValue');
+    if (storedValue) {
+      phoneInput.value = storedValue;
+      sessionStorage.removeItem('phoneInputValue');
+      return;
+    }
+    
+    // Check if the current value has country code and strip it
+    const currentValue = phoneInput.value;
+    const countryCode = countrySelect?.value || '+593';
+    
+    // If the input has country code prepended, strip it back to original
+    if (currentValue.startsWith(countryCode)) {
+      const withoutCode = currentValue.replace(countryCode, '').trim();
+      phoneInput.value = withoutCode;
+    }
   }
   
+  if (countrySelect) countrySelect.addEventListener('change', updateButtonState);
+  
+  restorePhoneValue();
+  
+  phoneInput.addEventListener('input', function() {
+    sessionStorage.setItem('phoneInputValue', phoneInput.value);
+    updateButtonState();
+  });
+  updateButtonState();
+  
   // Combine country code with phone before submit
-  if (form) {
-    form.addEventListener('submit', function(e) {
-      const countryCode = countrySelect?.value || '+593';
-      const phone = phoneInput?.value || '';
-      const digits = phone.replace(/D/g, '');
-      const fullPhone = countryCode + digits;
-      
-      // Create or update hidden input with full phone
-      let hiddenInput = form.querySelector('input[name="phone"]');
-      if (hiddenInput) {
-        hiddenInput.value = fullPhone;
-      }
-    });
+  form.addEventListener('submit', function(e) {
+    const countryCode = countrySelect?.value || '+593';
+    const phone = phoneInput?.value || '';
+    const digits = phone.replace(/\\D/g, '');
+    const fullPhone = countryCode + digits;
+    
+    // Store original value before modifying for submission
+    sessionStorage.setItem('phoneInputValue', phone);
+    
+    // Modify the phone input value for OpenAuth to read
+    phoneInput.value = fullPhone;
+  });
+});
+
+// pageshow fires when page is shown from bfcache (browser back)
+window.addEventListener('pageshow', function(event) {
+  // Only select visible phone input, not hidden inputs
+  const phoneInput = document.querySelector('input[type="tel"][name="phone"]');
+  const countrySelect = document.querySelector('.country-select');
+  
+  // Only run on start page
+  if (!phoneInput || !countrySelect) return;
+  
+  // Check if current value has country code and needs stripping
+  const currentValue = phoneInput.value;
+  const countryCode = countrySelect?.value || '+593';
+  
+  if (currentValue.startsWith(countryCode)) {
+    const withoutCode = currentValue.replace(countryCode, '').trim();
+    phoneInput.value = withoutCode;
+    sessionStorage.setItem('phoneInputValue', withoutCode);
   }
 });
 `;
@@ -198,9 +244,34 @@ export function CustomCodeUI(props: CustomCodeUIOptions): CodeProviderOptions {
   return {
     sendCode: props.sendCode,
     length: 6,
-    request: async (_req, state, _form, error): Promise<Response> => {
+    request: async (_req, state, form, error): Promise<Response> => {
       // Start state - phone number input with country selector
       if (state.type === 'start') {
+        let existingPhone = '';
+
+        // Check form data first (when user goes back from code screen)
+        if (form) {
+          existingPhone = (form.get('phone') as string) || '';
+        }
+
+        // If no phone in form data, check claims (if available)
+        if (!existingPhone && 'claims' in state) {
+          const claimsState = state as {
+            claims?: { phone?: string; phoneNumber?: string };
+          };
+          existingPhone =
+            claimsState.claims?.phone || claimsState.claims?.phoneNumber || '';
+        }
+
+        const defaultCountry = existingPhone.startsWith('+593')
+          ? '+593'
+          : existingPhone.startsWith('+54')
+            ? '+54'
+            : '+593';
+        const phoneWithoutCode = existingPhone
+          .replace(/^\+\d{2,3}/, '')
+          .replace(/^0/, '');
+
         const jsx = (
           <Layout>
             <form data-component="form" method="post">
@@ -211,7 +282,12 @@ export function CustomCodeUI(props: CustomCodeUIOptions): CodeProviderOptions {
               <div class="form-group">
                 <label for="phone">Número de teléfono</label>
                 <div class="input-row">
-                  <select name="countryCode" class="country-select" required>
+                  <select
+                    name="countryCode"
+                    class="country-select"
+                    required
+                    value={defaultCountry}
+                  >
                     {COUNTRIES.map((c) => (
                       <option key={c.code} value={c.code}>
                         {c.label}
@@ -222,6 +298,7 @@ export function CustomCodeUI(props: CustomCodeUIOptions): CodeProviderOptions {
                     type="tel"
                     id="phone"
                     name="phone"
+                    value={phoneWithoutCode}
                     inputmode="numeric"
                     required
                     placeholder={props.placeholder || '98 123 4567'}
