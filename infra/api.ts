@@ -15,6 +15,7 @@ export const api = new sst.aws.Function('api', {
       'USE_SINGLE_MODEL_SCAN',
     ]),
     AUTH_URL: auth.url,
+    SST_DEV: $dev,
   },
   link: [auth],
   timeout: '60 seconds',
