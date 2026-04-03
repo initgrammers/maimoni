@@ -12,11 +12,11 @@ const db = createDbClient(getEnv('DATABASE_URL'));
 
 // Wide-event logging - must be before auth to capture auth failures
 // Disable file storage in production (Lambda is read-only)
-const isProduction = getEnv('SST_STAGE') === 'production';
+const isDev = getEnv('SST_DEV') === 'true';
 app.use(
   '/api/*',
   wideLogger({
-    storage: isProduction ? undefined : createJsonStorage(),
+    storage: isDev ? createJsonStorage() : undefined,
     sampleRate: 1, // Log all events for debugging
     logger: console,
   }),
