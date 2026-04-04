@@ -18,6 +18,17 @@ import {
   initializeAnonymousUser,
   isLocalMode,
 } from '@/lib/anonymous';
+import {
+  claimAnonymousBoard,
+  createBoardInvitation,
+  dashboardQueryKey,
+  fetchBoardInvitations,
+  fetchDashboard,
+  removeBoard,
+  removeExpense,
+  removeIncome,
+  revokeInvitation,
+} from '@/lib/api';
 import { StackedBarChart } from '../components/charts/StackedBarChart';
 import type {
   Board,
@@ -50,186 +61,9 @@ function getMovementDateLabel(date: Date) {
   return target.format('dddd D MMM');
 }
 
-const API_BASE = getApiBase();
-const dashboardQueryKey = (accessToken: string) =>
-  ['dashboard', accessToken] as const;
-
 export const Route = createFileRoute('/' as never)({
   component: Dashboard,
 });
-
-async function fetchDashboard(accessToken: string, boardId?: string | null) {
-  const url = new URL(`${API_BASE}/api/dashboard`);
-  if (boardId) {
-    url.searchParams.set('boardId', boardId);
-  }
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('No se pudo cargar el tablero');
-  }
-
-  return (await response.json()) as DashboardResponse;
-}
-
-async function claimAnonymousBoard(
-  accessToken: string,
-  anonymousId: string,
-  localExpenses: unknown[] = [],
-  localIncomes: unknown[] = [],
-  localBoardId?: string,
-  localBoardName?: string,
-  localSpendingLimit?: string | null,
-) {
-  const response = await fetch(`${API_BASE}/api/auth/claim`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
-      anonymousId,
-      expenses: localExpenses,
-      incomes: localIncomes,
-      boardId: localBoardId,
-      boardName: localBoardName,
-      spendingLimitAmount: localSpendingLimit,
-    }),
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(payload?.error ?? 'No se pudo reclamar el tablero');
-  }
-}
-
-async function removeExpense(accessToken: string, expenseId: string) {
-  const response = await fetch(`${API_BASE}/api/expenses/${expenseId}`, {
-    method: 'DELETE',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? 'No se pudo eliminar el gasto');
-  }
-}
-
-async function removeIncome(accessToken: string, incomeId: string) {
-  const response = await fetch(`${API_BASE}/api/incomes/${incomeId}`, {
-    method: 'DELETE',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? 'No se pudo eliminar el ingreso');
-  }
-}
-
-async function removeBoard(accessToken: string, boardId: string) {
-  const response = await fetch(`${API_BASE}/api/boards/${boardId}`, {
-    method: 'DELETE',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? 'No se pudo eliminar el tablero');
-  }
-}
-
-async function fetchBoardInvitations(accessToken: string, boardId: string) {
-  const response = await fetch(
-    `${API_BASE}/api/boards/${boardId}/invitations`,
-    {
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-      },
-    },
-  );
-
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? 'No se pudieron cargar las invitaciones');
-  }
-
-  return (await response.json()) as BoardInvitation[];
-}
-
-async function createBoardInvitation(
-  accessToken: string,
-  boardId: string,
-  payload: {
-    targetRole: 'editor' | 'viewer';
-    ttlHours: number;
-    phoneNumber?: string;
-  },
-) {
-  const response = await fetch(
-    `${API_BASE}/api/boards/${boardId}/invitations`,
-    {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? 'No se pudo crear la invitación');
-  }
-
-  return (await response.json()) as {
-    invitation: BoardInvitation;
-    inviteToken: string;
-  };
-}
-
-async function revokeInvitation(accessToken: string, invitationId: string) {
-  const response = await fetch(
-    `${API_BASE}/api/invitations/${invitationId}/revoke`,
-    {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-      },
-    },
-  );
-
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? 'No se pudo revocar la invitación');
-  }
-}
 
 type BoardSelectorCardProps = {
   boards: DashboardResponse['boards'];
