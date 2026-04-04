@@ -19,134 +19,29 @@ import {
   isLocalMode,
 } from '@/lib/anonymous';
 import { StackedBarChart } from '../components/charts/StackedBarChart';
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from '../components/ui/drawer';
-import { deleteLocalExpense, getLocalExpenses } from '../lib/expense-service';
-import { deleteLocalIncome, getLocalIncomes } from '../lib/income-service';
-import { getApiBase, startAuth } from '../lib/openauth';
-import {
-  getDashboardPeriod,
-  getStatsMonth,
-  getStatsPeriodType,
-  getStatsYear,
-  setStatsPeriod as saveStatsPeriodToStorage,
-  setDashboardPeriod,
-} from '../lib/storage';
-import { getLocalBoard } from '../lib/storage-types';
+import type {
+  Board,
+  BoardInvitation,
+  DashboardResponse,
+  DashboardView,
+  DisplayMovement,
+  Expense,
+  Income,
+  Period,
+  PigMood,
+  SunburstData,
+  SunburstCategory,
+  SunburstSubcategory,
+} from '../components/types/dashboard';
+
+// Re-export Sunburst types for backward compatibility
+export type {
+  SunburstSubcategory,
+  SunburstCategory,
+  SunburstData,
+} from '../components/types/dashboard';
 
 dayjs.locale('es');
-
-type Board = {
-  id: string;
-  name: string;
-  spendingLimitAmount: string | null;
-};
-
-type Income = {
-  id: string;
-  amount: string;
-  date: string;
-  note: string | null;
-  categoryName: string;
-  categoryEmoji: string;
-};
-
-type Expense = {
-  categoryId: string;
-  subcategoryId: string | null;
-  subcategoryName: string | null;
-  subcategoryEmoji: string | null;
-  id: string;
-  amount: string;
-  date: string;
-  note: string | null;
-  categoryName: string;
-  categoryEmoji: string;
-};
-
-type DashboardResponse = {
-  board: Board;
-  role: 'owner' | 'editor' | 'viewer';
-  boards: Array<{
-    id: string;
-    name: string;
-    spendingLimitAmount: string | null;
-    role: 'owner' | 'editor' | 'viewer';
-  }>;
-  incomes: Income[];
-  expenses: Expense[];
-};
-
-type BoardInvitation = {
-  id: string;
-  boardId: string;
-  invitedByUserId: string | null;
-  invitedPhoneNumber: string | null;
-  inviteeUserId: string | null;
-  acceptedByUserId: string | null;
-  inviteTokenHash: string | null;
-  targetRole: 'editor' | 'viewer';
-  status: 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
-  expiresAt: string | null;
-  acceptedAt: string | null;
-  declinedAt: string | null;
-  revokedAt: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  inviterName: string | null;
-  inviterPhone: string | null;
-};
-
-type DisplayMovement = {
-  id: string;
-  amount: number;
-  type: 'income' | 'expense';
-  date: Date;
-  note: string | null;
-  categoryName: string;
-  categoryEmoji: string;
-  categoryId: string;
-  subcategoryId: string | null;
-  subcategoryName: string | null;
-  subcategoryEmoji: string | null;
-};
-
-type Period = 'month' | 'year';
-type DashboardView = 'dashboard' | 'stats' | 'profile' | 'settings';
-
-// Sunburst chart types
-export interface SunburstSubcategory {
-  id: string;
-  name: string;
-  percentage: number;
-  total: number;
-  color: string;
-  emoji: string;
-}
-
-export interface SunburstCategory {
-  id: string;
-  name: string;
-  percentage: number;
-  total: number;
-  color: string;
-  emoji: string;
-  children: SunburstSubcategory[];
-}
-
-export interface SunburstData {
-  categories: SunburstCategory[];
-  totalExpense: number;
-}
-type PigMood = 'sin_datos' | 'zen' | 'fuerte' | 'alerta' | 'urgencia';
 
 function getMovementDateLabel(date: Date) {
   const target = dayjs(date);
